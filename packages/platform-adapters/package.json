@@ -1,0 +1,19 @@
+{
+  "name": "@follac/platform-adapters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Platform adapters for Follac AI — Gmail, Google Docs, LinkedIn",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@follac/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

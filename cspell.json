@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "Follac",
+    "follac",
+    "FAANG",
+    "pnpm",
+    "fastify",
+    "openai",
+    "tailwindcss",
+    "autoprefixer",
+    "dotenv",
+    "tsx",
+    "vite",
+    "vitejs",
+    "linkedin",
+    "gmail",
+    "esm",
+    "noEmit",
+    "rootdir",
+    "verbatim",
+    "zod",
+    "crx",
+    "unpacked",
+    "contenteditable",
+    "innertext",
+    "mimetypes",
+    "unminified",
+    "navigations",
+    "Ollama",
+    "ollama",
+    "researchable"
+  ],
+  "ignorePaths": [
+    "node_modules",
+    "dist",
+    "build",
+    "*.lock",
+    "pnpm-lock.yaml"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "name": "@follac/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Follac AI backend — Agent inference gateway",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --project tsconfig.build.json",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@follac/shared": "workspace:*",
+    "@follac/agents": "workspace:*",
+    "fastify": "^4.27.0",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/rate-limit": "^9.1.0",
+    "openai": "^4.47.1",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "pino-pretty": "^11.0.0",
+    "tsx": "^4.15.6",
+    "typescript": "*"
+  }
+}

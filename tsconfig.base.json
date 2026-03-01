@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@follac/shared": ["./packages/shared/src/index.ts"],
+      "@follac/agents": ["./packages/agents/src/index.ts"],
+      "@follac/platform-adapters": ["./packages/platform-adapters/src/index.ts"],
+      "@follac/ui": ["./packages/ui/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "**/dist/**", "**/build/**"]
+}

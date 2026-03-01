@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["chrome", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@follac/shared": ["../../packages/shared/src/index.ts"],
+      "@follac/platform-adapters": ["../../packages/platform-adapters/src/index.ts"],
+      "@follac/agents": ["../../packages/agents/src/index.ts"],
+      "@follac/ui": ["../../packages/ui/src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"],
+  "exclude": ["dist", "node_modules"]
+}
