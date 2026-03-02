@@ -83,15 +83,14 @@ export class OverlayManager {
   }
 
   show(): void {
-    if (this.hostEl) {
-      this.hostEl.style.display = "block";
-    }
+    // Let React own visibility — dispatch an event instead of CSS manipulation.
+    // The host element is always in the DOM (pointerEvents:none acts as pass-through).
+    document.dispatchEvent(new CustomEvent("follac:sidebar-show"));
   }
 
   hide(): void {
-    if (this.hostEl) {
-      this.hostEl.style.display = "none";
-    }
+    // Only hides the sidebar action panel. Result modals stay open independently.
+    document.dispatchEvent(new CustomEvent("follac:sidebar-hide"));
   }
 
   destroy(): void {

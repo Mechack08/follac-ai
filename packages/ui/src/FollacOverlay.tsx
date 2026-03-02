@@ -1,45 +1,47 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type { ContextObject, ProposedAction } from "@follac/shared";
 import type { OverlayCallbacks } from "./types.js";
 import { ActionCard } from "./ActionCard.js";
-import { ResultPanel, isDisplayAction } from "./ResultPanel.js";
+import { isDisplayAction, type ResultEntry } from "./ResultModal.js";
 import { ContextBadge } from "./ContextBadge.js";
 
 interface FollacOverlayProps {
   callbacks: OverlayCallbacks;
 }
 
-interface ResultPanelEntry {
-  id: string;
-  action: ProposedAction;
-  output: string;
-}
-
 /**
- * FollacOverlay — The primary in-page overlay component.
+ * FollacOverlay — Right-side action card sidebar.
  *
  * Injected into the host page via Shadow DOM.
- * Receives context/action updates via CustomEvents on document.
- * Execution results are delivered via the `follac:result` event.
+ * Shows pending action cards. Execution results for display-type actions
+ * (summarize, extract-tasks, research) are dispatched as `follac:show-result`
+ * events and picked up by ResultModalContainer independently.
  *
- * Two-section layout:
- *  1. Result panels  — persistent, formatted display results (survive context updates)
- *  2. Action cards   — pending actions waiting for user approval
+ * Visibility is driven by `follac:sidebar-show` / `follac:sidebar-hide`
+ * events (dispatched by OverlayManager) — never by CSS display manipulation,
+ * so result modals are never accidentally hidden.
  */
 export function FollacOverlay({ callbacks }: FollacOverlayProps) {
   const [context, setContext] = useState<ContextObject | null>(null);
   const [actions, setActions] = useState<ProposedAction[]>([]);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
   const [executingId, setExecutingId] = useState<string | null>(null);
-  // DOM-write actions: brief "✓ Applied" success then card auto-dismisses
   const [successMap, setSuccessMap] = useState<Record<string, string>>({});
-  // Display actions: persistent result panels that survive context updates
-  const [resultPanels, setResultPanels] = useState<ResultPanelEntry[]>([]);
+
+  // ── Sidebar visibility ────────────────────────────────────────────────────
+  useEffect(() => {
+    const show = () => setIsSidebarVisible(true);
+    const hide = () => setIsSidebarVisible(false);
+    document.addEventListener("follac:sidebar-show", show);
+    document.addEventListener("follac:sidebar-hide", hide);
+    return () => {
+      document.removeEventListener("follac:sidebar-show", show);
+      document.removeEventListener("follac:sidebar-hide", hide);
+    };
+  }, []);
 
   // ── Context + action updates ──────────────────────────────────────────────
-  // Note: resultPanels are intentionally NOT cleared here — the user may still
-  // be reading a summary when the context refreshes (e.g. SPA navigation).
   useEffect(() => {
     const handler = (e: Event) => {
       const { context: ctx, actions: acts } = (e as CustomEvent<{
@@ -50,7 +52,7 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
       setActions(acts);
       setSuccessMap({});
       setExecutingId(null);
-      setIsVisible(true);
+      setIsSidebarVisible(true);
     };
     document.addEventListener("follac:update", handler);
     return () => document.removeEventListener("follac:update", handler);
@@ -71,27 +73,27 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
         if (!action) return currentActions;
 
         if (isDisplayAction(action.type) && !output.startsWith("⚠")) {
-          // ── Display action: open persistent result panel, remove card ──
-          setResultPanels((prev) => {
-            // De-duplicate: replace if the same action ran again
-            const without = prev.filter((p) => p.id !== actionId);
-            return [...without, { id: actionId, action, output }];
-          });
+          // ── Display action: open in the ResultModal popup ──────────────
+          const entry: ResultEntry = { id: actionId, action, output };
+          document.dispatchEvent(
+            new CustomEvent("follac:show-result", { detail: entry }),
+          );
           return currentActions.filter((a) => a.id !== actionId);
-        } else {
-          // ── DOM-write action (or error): brief success/error then auto-dismiss ──
-          const msg = output.startsWith("⚠") ? output : "✓ Applied to editor";
-          setSuccessMap((prev) => ({ ...prev, [actionId]: msg }));
-          setTimeout(() => {
-            setActions((prev) => prev.filter((a) => a.id !== actionId));
-            setSuccessMap((prev) => {
-              const next = { ...prev };
-              delete next[actionId];
-              return next;
-            });
-          }, 2200);
-          return currentActions;
         }
+
+        // ── DOM-write action (or error): show brief status, then auto-dismiss ──
+        const msg = output.startsWith("⚠") ? output : "✓ Applied to editor";
+        setSuccessMap((prev) => ({ ...prev, [actionId]: msg }));
+        setTimeout(() => {
+          setActions((prev) => prev.filter((a) => a.id !== actionId));
+          setSuccessMap((prev) => {
+            const next = { ...prev };
+            delete next[actionId];
+            return next;
+          });
+        }, 2200);
+
+        return currentActions;
       });
     };
     document.addEventListener("follac:result", handler);
@@ -108,17 +110,11 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
     setActions((prev) => prev.filter((a) => a.id !== actionId));
   };
 
-  const handleClosePanel = useCallback((id: string) => {
-    setResultPanels((prev) => prev.filter((p) => p.id !== id));
-  }, []);
-
-  const hasContent = resultPanels.length > 0 || actions.length > 0;
-
-  if (!isVisible || !context) return null;
+  if (!isSidebarVisible || !context || actions.length === 0) return null;
 
   return (
     <div
-      className="animate-slide-in fixed top-4 right-4 w-[380px] rounded-follac bg-slate-900 border border-slate-700 shadow-follac overflow-hidden"
+      className="animate-slide-in fixed top-4 right-4 w-[360px] rounded-follac bg-slate-900 border border-slate-700 shadow-follac overflow-hidden"
       style={{ pointerEvents: "all" }}
     >
       {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -142,7 +138,7 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
           </button>
           <button
             onClick={() => {
-              setIsVisible(false);
+              setIsSidebarVisible(false);
               callbacks.onDismiss();
             }}
             className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors text-xs"
@@ -155,30 +151,9 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
 
       {/* ── Body ─────────────────────────────────────────────────────────── */}
       {isExpanded && (
-        <div className="p-3 space-y-2 max-h-[80vh] overflow-y-auto">
-          {/* Intent line */}
+        <div className="p-3 space-y-2 max-h-[70vh] overflow-y-auto">
           <p className="text-xs text-slate-400 leading-relaxed">{context.inferredIntent}</p>
 
-          {/* ── Persistent result panels (display actions) ─────────────── */}
-          {resultPanels.map((panel) => (
-            <ResultPanel
-              key={panel.id}
-              action={panel.action}
-              output={panel.output}
-              onClose={() => handleClosePanel(panel.id)}
-            />
-          ))}
-
-          {/* Divider between panels and pending actions */}
-          {resultPanels.length > 0 && actions.length > 0 && (
-            <div className="border-t border-slate-700/60 pt-1">
-              <p className="text-[10px] text-slate-600 uppercase tracking-wide">
-                More suggestions
-              </p>
-            </div>
-          )}
-
-          {/* ── Pending action cards ───────────────────────────────────── */}
           {actions.map((action) => (
             <ActionCard
               key={action.id}
@@ -189,10 +164,6 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
               onReject={() => handleReject(action.id)}
             />
           ))}
-
-          {!hasContent && (
-            <p className="text-center text-[11px] text-slate-500 py-2">All done!</p>
-          )}
 
           <p className="text-center text-[10px] text-slate-600 pt-1">
             Actions require your approval
