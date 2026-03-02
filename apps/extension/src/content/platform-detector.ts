@@ -95,4 +95,8 @@ export class PlatformDetector {
   destroy(): void {
     this.teardownCurrent();
   }
+
+  getCurrentAdapter(): PlatformAdapter | null {
+    return this.currentAdapter;
+  }
 }

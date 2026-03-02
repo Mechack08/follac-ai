@@ -55,10 +55,10 @@ export class OverlayManager {
 
     this.shadowRoot = this.hostEl.attachShadow({ mode: "open" });
 
-    // Inject Tailwind styles into shadow root
+    // Inject Tailwind styles into shadow root (popup.css is the compiled Tailwind output)
     const styleLink = document.createElement("link");
     styleLink.rel = "stylesheet";
-    styleLink.href = chrome.runtime.getURL("assets/content.css");
+    styleLink.href = chrome.runtime.getURL("popup.css");
     this.shadowRoot.appendChild(styleLink);
 
     const mountPoint = document.createElement("div");
@@ -78,8 +78,8 @@ export class OverlayManager {
    */
   update(context: ContextObject, actions: ProposedAction[]): void {
     if (!this.isInjected) return;
-    const event = new CustomEvent("follac:update", { detail: { context, actions } });
-    this.hostEl?.dispatchEvent(event);
+    // Dispatch on document so the React component inside Shadow DOM can receive it
+    document.dispatchEvent(new CustomEvent("follac:update", { detail: { context, actions } }));
   }
 
   show(): void {

@@ -12,10 +12,8 @@ interface FollacOverlayProps {
  * FollacOverlay — The primary in-page overlay component.
  *
  * Injected into the host page via Shadow DOM.
- * Rendered inside the extension's isolated style context.
- *
- * Receives context/action updates via a CustomEvent fired from OverlayManager.
- * All approval/rejection events are passed back through callbacks.
+ * Receives context/action updates via CustomEvents on document.
+ * Execution results are delivered via the `follac:result` event.
  */
 export function FollacOverlay({ callbacks }: FollacOverlayProps) {
   const [context, setContext] = useState<ContextObject | null>(null);
@@ -23,39 +21,56 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
   const [executingId, setExecutingId] = useState<string | null>(null);
+  const [resultMap, setResultMap] = useState<Record<string, string>>({});
 
-  // Listen for updates from OverlayManager via CustomEvent
+  // Listen for context + action updates from OverlayManager
   useEffect(() => {
     const handler = (e: Event) => {
       const { context: ctx, actions: acts } = (e as CustomEvent<{
         context: ContextObject;
         actions: ProposedAction[];
       }>).detail;
-
       setContext(ctx);
       setActions(acts);
+      setResultMap({});
+      setExecutingId(null);
       setIsVisible(acts.length > 0);
     };
-
-    // The custom event is dispatched on the host element (outside shadow root)
-    // We listen on the document and bubble it through
     document.addEventListener("follac:update", handler);
     return () => document.removeEventListener("follac:update", handler);
   }, []);
 
-  const handleApprove = async (action: ProposedAction) => {
+  // Listen for execution results from content script
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { actionId, output } = (e as CustomEvent<{
+        actionId: string;
+        output: string;
+      }>).detail;
+      setResultMap((prev) => ({ ...prev, [actionId]: output }));
+      setExecutingId((prev) => (prev === actionId ? null : prev));
+    };
+    document.addEventListener("follac:result", handler);
+    return () => document.removeEventListener("follac:result", handler);
+  }, []);
+
+  const handleApprove = (action: ProposedAction) => {
     setExecutingId(action.id);
     callbacks.onActionApproved(action);
-    // Optimistically remove action from list after short delay
-    setTimeout(() => {
-      setActions((prev) => prev.filter((a) => a.id !== action.id));
-      setExecutingId(null);
-    }, 1500);
   };
 
   const handleReject = (actionId: string) => {
     callbacks.onActionRejected(actionId);
     setActions((prev) => prev.filter((a) => a.id !== actionId));
+  };
+
+  const handleDismissResult = (actionId: string) => {
+    setActions((prev) => prev.filter((a) => a.id !== actionId));
+    setResultMap((prev) => {
+      const next = { ...prev };
+      delete next[actionId];
+      return next;
+    });
   };
 
   if (!isVisible || !context) return null;
@@ -99,7 +114,7 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
 
       {/* Body */}
       {isExpanded && (
-        <div className="p-3 space-y-2 max-h-[480px] overflow-y-auto">
+        <div className="p-3 space-y-2 max-h-[520px] overflow-y-auto">
           {/* Intent line */}
           <p className="text-xs text-slate-400 leading-relaxed">{context.inferredIntent}</p>
 
@@ -109,10 +124,16 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
               key={action.id}
               action={action}
               isExecuting={executingId === action.id}
-              onApprove={() => void handleApprove(action)}
+              result={resultMap[action.id]}
+              onApprove={() => handleApprove(action)}
               onReject={() => handleReject(action.id)}
+              onDismissResult={() => handleDismissResult(action.id)}
             />
           ))}
+
+          {actions.length === 0 && (
+            <p className="text-center text-[11px] text-slate-500 py-2">All done!</p>
+          )}
 
           <p className="text-center text-[10px] text-slate-600 pt-1">
             Actions require your approval

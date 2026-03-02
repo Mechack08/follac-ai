@@ -19,8 +19,8 @@ type DOMWriter = (output: string, context: ContextObject) => Promise<void>;
 
 export class ExecutionRunner {
   private readonly writers: Partial<Record<ActionType, DOMWriter>> = {
-    "draft-email": this.writeToGmailCompose.bind(this),
-    "generate-reply": this.writeToGmailCompose.bind(this),
+    "draft-email": this.openGmailComposeAndWrite.bind(this),
+    "generate-reply": this.openGmailReplyAndWrite.bind(this),
     "compose-linkedin-message": this.writeToLinkedInMessageBox.bind(this),
     "rewrite-paragraph": this.replaceSelectedText.bind(this),
   };
@@ -41,19 +41,91 @@ export class ExecutionRunner {
 
   // ─── Gmail Compose ──────────────────────────────────────────────────────────
 
-  private async writeToGmailCompose(output: string): Promise<void> {
-    const editor = document.querySelector<HTMLElement>(".Am.Al.editable.LW-avf");
+  /** Open a NEW compose window (Draft Email action) and inject text */
+  private async openGmailComposeAndWrite(output: string): Promise<void> {
+    let editor = document.querySelector<HTMLElement>(".Am.Al.editable.LW-avf");
+
+    if (!editor) {
+      // Click the Gmail "Compose" button
+      const composeBtn = document.querySelector<HTMLElement>(
+        ".T-I.T-I-KE[gh='cm'], .z0 > .L3",
+      );
+      if (composeBtn) {
+        composeBtn.click();
+        await this.waitForElement(".Am.Al.editable.LW-avf", 2000);
+        editor = document.querySelector<HTMLElement>(".Am.Al.editable.LW-avf");
+      }
+    }
+
+    await this.injectIntoEditor(editor, output);
+  }
+
+  /** Open the REPLY compose window and inject the generated reply */
+  private async openGmailReplyAndWrite(output: string): Promise<void> {
+    let editor = document.querySelector<HTMLElement>(".Am.Al.editable.LW-avf");
+
+    if (!editor) {
+      // Try reply button selectors (Gmail uses multiple depending on layout)
+      const replySelectors = [
+        "[data-tooltip='Reply']",
+        ".ams.bkH",                 // icon reply button in thread
+        ".b8.UC span[aria-label*='Reply']",
+        "span[aria-label='Reply']", // accessible label fallback
+      ];
+
+      let clicked = false;
+      for (const sel of replySelectors) {
+        const btn = document.querySelector<HTMLElement>(sel);
+        if (btn) {
+          btn.click();
+          clicked = true;
+          break;
+        }
+      }
+
+      if (clicked) {
+        await this.waitForElement(".Am.Al.editable.LW-avf", 2000);
+        editor = document.querySelector<HTMLElement>(".Am.Al.editable.LW-avf");
+      }
+    }
+
+    await this.injectIntoEditor(editor, output);
+  }
+
+  /** Shared: focus an editor element and set its text content */
+  private async injectIntoEditor(editor: HTMLElement | null, output: string): Promise<void> {
     if (!editor) {
       console.warn("[Follac] Gmail compose editor not found");
       return;
     }
 
     editor.focus();
-    editor.innerText = output;
+    editor.innerText = "";
+
+    // Use execCommand for undo-stack compatibility; fall back to innerText assignment
+    const inserted = document.execCommand("insertText", false, output);
+    if (!inserted) {
+      editor.innerText = output;
+    }
 
     // Trigger Gmail's internal change detection
-    editor.dispatchEvent(new Event("input", { bubbles: true }));
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
     editor.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  /** Poll for an element to appear, up to `timeoutMs` */
+  private waitForElement(selector: string, timeoutMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (document.querySelector(selector)) return resolve();
+      const observer = new MutationObserver(() => {
+        if (document.querySelector(selector)) {
+          observer.disconnect();
+          resolve();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      setTimeout(() => { observer.disconnect(); resolve(); }, timeoutMs);
+    });
   }
 
   // ─── LinkedIn Message Box ──────────────────────────────────────────────────

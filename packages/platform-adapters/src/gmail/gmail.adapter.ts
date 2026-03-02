@@ -155,18 +155,23 @@ export class GmailAdapter extends BaseAdapter {
   }
 
   private extractSubject(): string | null {
-    return (
-      this.getTextContent("h2.hP") ||
-      this.getAttribute("title[data-legacy-thread-id]", "title") ||
-      document.title?.replace(" - Gmail", "").trim() ||
-      null
-    );
+    // Primary: thread subject heading
+    const h2 = this.getTextContent("h2.hP");
+    if (h2) return h2;
+    // Secondary: title attribute on thread anchor
+    const titleEl = document.querySelector<HTMLElement>("[email][data-hovercard-id] + span");
+    if (titleEl?.textContent) return titleEl.textContent.trim();
+    // Tertiary: page title minus " - Gmail"
+    const pageTitle = document.title?.replace(/ - Gmail$/i, "").trim();
+    return pageTitle || null;
   }
 
   private extractSenderName(): string | null {
+    // Try the sender span in expanded view
     return (
       this.getTextContent(".gD[email]") ||
-      this.getTextContent("span.go") ||
+      this.getTextContent(".go") ||
+      this.getAttribute(".iw span[email]", "name") ||
       null
     );
   }
@@ -183,15 +188,31 @@ export class GmailAdapter extends BaseAdapter {
   }
 
   private extractBodyPreview(): string | null {
-    const emailBody = this.querySelector(".a3s.aiL");
-    if (!emailBody) return null;
-    return emailBody.textContent?.trim().slice(0, 1000) ?? null;
+    // Collect all expanded message bodies in the thread (most complete view)
+    const bodies = this.querySelectorAll<HTMLElement>(".a3s.aiL");
+    if (!bodies.length) {
+      // Fallback: get any visible quoted/preview text
+      const preview = this.getTextContent(".y6");
+      return preview?.slice(0, 3000) ?? null;
+    }
+
+    // Concatenate all messages with separator, newest at bottom (Gmail default order)
+    const allText = bodies
+      .map((el) => el.textContent?.replace(/\s+/g, " ").trim() ?? "")
+      .filter(Boolean)
+      .join("\n\n--- Next message ---\n\n");
+
+    // Cap at 5000 chars to keep prompts reasonable
+    return allText.slice(0, 5000) || null;
   }
 
   private isComposeWindowOpen(): boolean {
-    return this.querySelector(".M9 .compose-form") !== null ||
+    return (
+      this.querySelector(".M9 .compose-form") !== null ||
+      this.querySelector(".dw .Am.Al.editable") !== null ||
       this.querySelector("[data-tooltip='Send']") !== null ||
-      window.location.hash.includes("compose");
+      window.location.hash.includes("compose")
+    );
   }
 
   private extractComposeDraft(): string | null {
@@ -210,11 +231,16 @@ export class GmailAdapter extends BaseAdapter {
   }
 
   private extractMessageCount(): number {
-    const countEl = this.querySelector(".Dj");
+    // Gmail shows message count in the thread header e.g. "Re: Subject (3)"
+    const countEl = this.querySelector(".Dj") ?? this.querySelector("[data-thread-id] .yX");
     const text = countEl?.textContent?.trim();
-    if (!text) return 1;
-    const match = text.match(/(\d+)/);
-    return match ? parseInt(match[1], 10) : 1;
+    if (text) {
+      const match = text.match(/(\d+)/);
+      if (match) return parseInt(match[1], 10);
+    }
+    // Count expanded message containers as fallback
+    const messageContainers = this.querySelectorAll(".gs");
+    return messageContainers.length || 1;
   }
 
   // ─── Context Classification Helpers ─────────────────────────────────────────

@@ -8,6 +8,7 @@ const orchestrator = new AgentOrchestrator(`http://localhost:${config.port}`);
 
 const OrchestrateBody = z.object({
   context: z.record(z.unknown()),
+  adapterActions: z.array(z.record(z.unknown())).optional(),
 });
 
 const ExecuteBody = z.object({
@@ -40,9 +41,10 @@ export async function orchestrateRoutes(fastify: FastifyInstance): Promise<void>
     }
 
     const context = body.data.context as unknown as ContextObject;
+    const adapterActions = (body.data.adapterActions ?? []) as unknown as ProposedAction[];
 
     try {
-      const result = await orchestrator.analyze(context);
+      const result = await orchestrator.analyze(context, adapterActions.length > 0 ? adapterActions : undefined);
 
       return {
         proposedActions: result.proposedActions,

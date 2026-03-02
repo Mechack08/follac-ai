@@ -23,7 +23,7 @@ import type { ContextObject, ProposedAction, ExtensionMessage } from "@follac/sh
 import { EXTENSION_CONFIG, now } from "@follac/shared";
 import { PlatformDetector } from "./platform-detector.js";
 import { OverlayManager } from "./overlay-manager.js";
-import { ExecutionRunner } from "./execution-runner.ts";
+import { ExecutionRunner } from "./execution-runner.js";
 
 // ─── Initialization ───────────────────────────────────────────────────────────
 
@@ -76,10 +76,14 @@ async function requestActions(context: ContextObject): Promise<void> {
   isProcessing = true;
 
   try {
+    // Get deterministic actions from the adapter (fast, no LLM needed for action selection)
+    const adapter = platformDetector.getCurrentAdapter();
+    const adapterActions = adapter ? await adapter.proposeActions(context) : [];
+
     const response = await fetch(`${EXTENSION_CONFIG.SERVER_BASE_URL}/api/orchestrate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ context }),
+      body: JSON.stringify({ context, adapterActions }),
     });
 
     if (!response.ok) {
@@ -112,6 +116,9 @@ async function handleActionApproved(action: ProposedAction): Promise<void> {
 
   sendToBackground({ topic: "action:approved", payload: action, timestamp: now() });
 
+  // DOM-writing actions: result is applied directly to the page editor
+  const isDomWrite = (["draft-email", "generate-reply", "compose-linkedin-message", "rewrite-paragraph"] as string[]).includes(action.type);
+
   try {
     const response = await fetch(`${EXTENSION_CONFIG.SERVER_BASE_URL}/api/execute`, {
       method: "POST",
@@ -126,9 +133,20 @@ async function handleActionApproved(action: ProposedAction): Promise<void> {
     // Execute the action in the DOM
     await executionRunner.execute(action, result.output, currentContext);
 
+    // Notify overlay with the result so it can display output or a success message
+    document.dispatchEvent(new CustomEvent("follac:result", {
+      detail: {
+        actionId: action.id,
+        output: isDomWrite ? "✓ Applied to editor" : (result.output ?? "Done"),
+      },
+    }));
+
     sendToBackground({ topic: "action:completed", payload: action, timestamp: now() });
   } catch (err) {
     console.error("[Follac] Action execution failed:", err);
+    document.dispatchEvent(new CustomEvent("follac:result", {
+      detail: { actionId: action.id, output: "⚠ Error: execution failed" },
+    }));
     sendToBackground({ topic: "action:failed", payload: action, timestamp: now() });
   }
 }

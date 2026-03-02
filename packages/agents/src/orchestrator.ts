@@ -43,25 +43,44 @@ export class AgentOrchestrator {
 
   /**
    * Run the full context → actions pipeline.
-   * Called every time the context changes meaningfully.
+   * If adapterActions are provided (from the client-side platform adapter),
+   * they are used directly — skipping the ActionAgent LLM call for reliability.
    */
-  async analyze(context: ContextObject): Promise<OrchestratorResult> {
+  async analyze(context: ContextObject, adapterActions?: ProposedAction[]): Promise<OrchestratorResult> {
     const pipelineStart = performance.now();
     const baseRequest: AgentRequest = {
       agentType: "context",
       context,
     };
 
-    // Step 1 — Context analysis
+    // Step 1 — Context analysis (always runs — enriches intent/entities)
     const contextResponse = await this.contextAgent.run(baseRequest);
     const contextAnalysis = contextResponse.data;
 
-    // Step 2 — Action proposals (parallel-safe, independent of research)
-    const actionRequest: AgentRequest = { agentType: "action", context };
+    // Step 2 — Actions: use adapter-proposed actions if available (faster + deterministic)
+    //           Otherwise fall back to ActionAgent LLM call
     const researchNeeded = this.shouldRunResearch(context);
 
+    let proposedActions: ProposedAction[];
+
+    if (adapterActions && adapterActions.length > 0) {
+      // Use the deterministic adapter actions and run research in parallel if needed
+      const researchResponse = researchNeeded
+        ? await this.researchAgent.run({ agentType: "research", context })
+        : null;
+      proposedActions = adapterActions;
+      const totalLatencyMs = Math.round(performance.now() - pipelineStart);
+      return {
+        contextAnalysis,
+        proposedActions,
+        research: researchResponse?.data ?? null,
+        totalLatencyMs,
+      };
+    }
+
+    // Fallback: LLM-generated actions
     const [actionResponse, researchResponse] = await Promise.all([
-      this.actionAgent.run(actionRequest),
+      this.actionAgent.run({ agentType: "action", context }),
       researchNeeded
         ? this.researchAgent.run({ agentType: "research", context })
         : Promise.resolve(null),
