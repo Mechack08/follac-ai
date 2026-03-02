@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ContextObject, ProposedAction } from "@follac/shared";
 import type { OverlayCallbacks } from "./types.js";
 import { ActionCard } from "./ActionCard.js";
@@ -28,6 +28,22 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [executingId, setExecutingId] = useState<string | null>(null);
   const [successMap, setSuccessMap] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  /** Incremented on each context update — forces cards to re-animate */
+  const generationRef = useRef(0);
+  const [generation, setGeneration] = useState(0);
+
+  // ── Loading state (navigation started, waiting for new actions) ─────────
+  useEffect(() => {
+    const handler = () => {
+      setIsLoading(true);
+      setActions([]);
+      setSuccessMap({});
+      setExecutingId(null);
+    };
+    document.addEventListener("follac:loading", handler);
+    return () => document.removeEventListener("follac:loading", handler);
+  }, []);
 
   // ── Sidebar visibility ────────────────────────────────────────────────────
   useEffect(() => {
@@ -52,6 +68,9 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
       setActions(acts);
       setSuccessMap({});
       setExecutingId(null);
+      setIsLoading(false);
+      generationRef.current += 1;
+      setGeneration(generationRef.current);
       setIsSidebarVisible(true);
     };
     document.addEventListener("follac:update", handler);
@@ -110,7 +129,9 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
     setActions((prev) => prev.filter((a) => a.id !== actionId));
   };
 
-  if (!isSidebarVisible || !context || actions.length === 0) return null;
+  if (!isSidebarVisible || !context) return null;
+
+  const STAGGER = ["animate-fade-up-1", "animate-fade-up-2", "animate-fade-up-3"] as const;
 
   return (
     <div
@@ -152,11 +173,31 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
       {/* ── Body ─────────────────────────────────────────────────────────── */}
       {isExpanded && (
         <div className="p-3 space-y-2 max-h-[70vh] overflow-y-auto">
-          <p className="text-xs text-slate-400 leading-relaxed">{context.inferredIntent}</p>
+          <p className="text-xs text-slate-400 leading-relaxed animate-fade-in">{context.inferredIntent}</p>
 
-          {actions.map((action) => (
+          {/* Loading skeleton while waiting for actions */}
+          {isLoading && (
+            <div className="space-y-2 animate-fade-in">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="rounded-lg bg-slate-800 border border-slate-700 p-2.5 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="w-5 h-5 rounded bg-slate-700 animate-pulse-soft flex-shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 bg-slate-700 rounded animate-pulse-soft w-3/4" />
+                      <div className="h-2.5 bg-slate-700/60 rounded animate-pulse-soft w-full" />
+                    </div>
+                  </div>
+                  <div className="h-6 bg-slate-700/50 rounded-md animate-pulse-soft" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Action cards with staggered entrance */}
+          {!isLoading && actions.map((action, i) => (
             <ActionCard
-              key={action.id}
+              key={`${generation}-${action.id}`}
+              className={STAGGER[Math.min(i, 2)]}
               action={action}
               isExecuting={executingId === action.id}
               successMessage={successMap[action.id]}
@@ -164,6 +205,10 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
               onReject={() => handleReject(action.id)}
             />
           ))}
+
+          {!isLoading && actions.length === 0 && (
+            <p className="text-center text-[11px] text-slate-500 py-2 animate-fade-in">All done!</p>
+          )}
 
           <p className="text-center text-[10px] text-slate-600 pt-1">
             Actions require your approval

@@ -5,6 +5,8 @@ interface ActionCardProps {
   isExecuting: boolean;
   /** For DOM-write actions: a brief success/error message shown before auto-dismiss. */
   successMessage?: string;
+  /** Tailwind animation class for staggered entrance (e.g. animate-fade-up-1) */
+  className?: string;
   onApprove: () => void;
   onReject: () => void;
 }
@@ -21,13 +23,13 @@ const ACTION_ICONS: Record<string, string> = {
   "custom": "⚡",
 };
 
-export function ActionCard({ action, isExecuting, successMessage, onApprove, onReject }: ActionCardProps) {
+export function ActionCard({ action, isExecuting, successMessage, className = "", onApprove, onReject }: ActionCardProps) {
   const confidence = Math.round(action.confidence * 100);
   const icon = ACTION_ICONS[action.type] ?? "⚡";
   const isError = successMessage?.startsWith("⚠");
 
   return (
-    <div className="rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors p-2.5 space-y-2">
+    <div className={`rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors p-2.5 space-y-2 ${className}`}>
       {/* ── Card info row ─────────────────────────────────────────────── */}
       <div className="flex items-start gap-2">
         <span className="text-base leading-none mt-0.5">{icon}</span>

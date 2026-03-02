@@ -66,6 +66,9 @@ window.addEventListener("popstate", () => {
 });
 
 window.addEventListener("follac:navigate", () => {
+  // Signal loading state immediately so the overlay shows a spinner,
+  // not stale action cards from the previous email.
+  document.dispatchEvent(new CustomEvent("follac:loading"));
   platformDetector.initialize(window.location.href);
 });
 

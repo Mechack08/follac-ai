@@ -15,8 +15,11 @@ export const PLATFORM_URL_PATTERNS: Record<Platform, RegExp> = {
  * Extension configuration constants.
  */
 export const EXTENSION_CONFIG = {
-  /** Debounce for DOM observation events (ms) */
-  DOM_DEBOUNCE_MS: 500,
+  /** Debounce for MutationObserver DOM events (ms) — content loading within same page */
+  DOM_DEBOUNCE_MS: 150,
+
+  /** Debounce after a URL/hash change — short so email header is ready but not blocking */
+  URL_CHANGE_DEBOUNCE_MS: 80,
 
   /** Minimum confidence to auto-show the overlay */
   MIN_CONFIDENCE_TO_SHOW: 0.5,

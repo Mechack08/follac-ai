@@ -32,7 +32,11 @@ type ContextChangeHandler = (context: ContextObject) => void;
 export class PlatformDetector {
   private currentAdapter: PlatformAdapter | null = null;
   private onContextChange: ContextChangeHandler;
+  /** Debounced detector for MutationObserver triggers (DOM content loading) */
   private readonly debouncedDetect: () => void;
+  /** Short-delay timer handle for URL-change triggers */
+  private urlChangeTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastUrl = "";
 
   constructor(onContextChange: ContextChangeHandler) {
     this.onContextChange = onContextChange;
@@ -44,7 +48,12 @@ export class PlatformDetector {
 
   /**
    * Initialize detection for the current URL.
-   * Should be called once on content script load, and again on SPA navigations.
+   * Called once on load and again on every SPA navigation.
+   *
+   * URL changes (new email): run detection after a short 80ms delay so Gmail
+   * has time to render the email header, but don't wait for DOM to settle.
+   *
+   * DOM mutations (same URL): use the normal 150ms debounce.
    */
   initialize(url: string): void {
     const adapter = adapterRegistry.resolve(url);
@@ -55,9 +64,18 @@ export class PlatformDetector {
       return;
     }
 
+    const urlChanged = url !== this.lastUrl;
+    this.lastUrl = url;
+
     if (this.currentAdapter?.name === adapter.name) {
-      // Same adapter — just re-run detection
-      this.debouncedDetect();
+      if (urlChanged) {
+        // Same platform, different URL (e.g. opened another email).
+        // Skip the long DOM debounce — detect after a short delay.
+        this.scheduleUrlChangeDetection();
+      } else {
+        // Same URL, DOM mutation — use normal debounce.
+        this.debouncedDetect();
+      }
       return;
     }
 
@@ -65,13 +83,26 @@ export class PlatformDetector {
     this.teardownCurrent();
     this.currentAdapter = adapter;
 
-    // Some adapters (Gmail, LinkedIn) support MutationObserver-based change detection
+    // Observe DOM mutations for in-page content changes (compose windows etc.)
     if ("observe" in adapter && typeof (adapter as GmailAdapter).observe === "function") {
       (adapter as GmailAdapter).observe(this.debouncedDetect);
     }
 
     console.warn(`[Follac] Initialized adapter: ${adapter.name}`);
     void this.runDetection();
+  }
+
+  /**
+   * Run detection after URL_CHANGE_DEBOUNCE_MS (80ms).
+   * Much faster than waiting for DOM to fully settle (150ms+).
+   * A second detection fires later via MutationObserver if content is still loading.
+   */
+  private scheduleUrlChangeDetection(): void {
+    if (this.urlChangeTimer !== null) clearTimeout(this.urlChangeTimer);
+    this.urlChangeTimer = setTimeout(() => {
+      this.urlChangeTimer = null;
+      void this.runDetection();
+    }, EXTENSION_CONFIG.URL_CHANGE_DEBOUNCE_MS);
   }
 
   private async runDetection(): Promise<void> {
@@ -88,6 +119,10 @@ export class PlatformDetector {
   }
 
   private teardownCurrent(): void {
+    if (this.urlChangeTimer !== null) {
+      clearTimeout(this.urlChangeTimer);
+      this.urlChangeTimer = null;
+    }
     this.currentAdapter?.teardown();
     this.currentAdapter = null;
   }
