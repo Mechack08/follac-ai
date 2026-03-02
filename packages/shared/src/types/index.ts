@@ -129,7 +129,9 @@ export type MessageTopic =
   | "overlay:show"
   | "overlay:hide"
   | "memory:save"
-  | "memory:query";
+  | "memory:query"
+  | "fetch:orchestrate"
+  | "fetch:execute";
 
 export interface ExtensionMessage<T = unknown> {
   topic: MessageTopic;

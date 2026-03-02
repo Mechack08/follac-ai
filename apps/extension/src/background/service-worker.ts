@@ -14,6 +14,8 @@
 
 import type { ExtensionMessage, ContextObject, ProposedAction } from "@follac/shared";
 
+const SERVER_BASE = "http://localhost:3001";
+
 // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -55,6 +57,19 @@ chrome.runtime.onMessage.addListener(
         }
         sendResponse({ ok: true });
         break;
+
+      // ── Proxy: content scripts cannot fetch localhost due to Gmail/Docs CSP ──
+      case "fetch:orchestrate":
+        proxyFetch(`${SERVER_BASE}/api/orchestrate`, message.payload)
+          .then((data) => sendResponse({ ok: true, data }))
+          .catch((err: unknown) => sendResponse({ ok: false, error: String(err) }));
+        return true; // keep channel open for async
+
+      case "fetch:execute":
+        proxyFetch(`${SERVER_BASE}/api/execute`, message.payload)
+          .then((data) => sendResponse({ ok: true, data }))
+          .catch((err: unknown) => sendResponse({ ok: false, error: String(err) }));
+        return true; // keep channel open for async
 
       default:
         sendResponse({ ok: false, error: "Unknown topic" });
@@ -130,4 +145,20 @@ function clearTabContext(tabId: number): void {
 
 function updateBadge(tabId: number, text: string): void {
   chrome.action.setBadgeText({ text, tabId });
+}
+
+// ─── Proxy Fetch Helper ───────────────────────────────────────────────────────
+// Service worker bypasses page CSP (Gmail / Docs block fetch to localhost).
+
+async function proxyFetch(url: string, body: unknown): Promise<unknown> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "Unknown error");
+    throw new Error(`Server error ${response.status}: ${text}`);
+  }
+  return response.json();
 }

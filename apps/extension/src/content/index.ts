@@ -20,7 +20,7 @@
  */
 
 import type { ContextObject, ProposedAction, ExtensionMessage } from "@follac/shared";
-import { EXTENSION_CONFIG, now } from "@follac/shared";
+import { now } from "@follac/shared";
 import { PlatformDetector } from "./platform-detector.js";
 import { OverlayManager } from "./overlay-manager.js";
 import { ExecutionRunner } from "./execution-runner.js";
@@ -80,21 +80,17 @@ async function requestActions(context: ContextObject): Promise<void> {
     const adapter = platformDetector.getCurrentAdapter();
     const adapterActions = adapter ? await adapter.proposeActions(context) : [];
 
-    const response = await fetch(`${EXTENSION_CONFIG.SERVER_BASE_URL}/api/orchestrate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ context, adapterActions }),
-    });
+    // Route through background worker — content scripts can't fetch localhost
+    // directly on Gmail/Docs due to the page's Content Security Policy.
+    const result = await chrome.runtime.sendMessage({
+      topic: "fetch:orchestrate",
+      payload: { context, adapterActions },
+      timestamp: now(),
+    }) as { ok: boolean; data?: { proposedActions: ProposedAction[] }; error?: string };
 
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
-    }
+    if (!result.ok) throw new Error(result.error ?? "Orchestrate failed");
 
-    const result = await response.json() as {
-      proposedActions: ProposedAction[];
-    };
-
-    const actions = result.proposedActions;
+    const actions = result.data?.proposedActions ?? [];
 
     if (actions.length > 0) {
       sendToBackground({ topic: "action:proposed", payload: actions, timestamp: now() });
@@ -120,24 +116,25 @@ async function handleActionApproved(action: ProposedAction): Promise<void> {
   const isDomWrite = (["draft-email", "generate-reply", "compose-linkedin-message", "rewrite-paragraph"] as string[]).includes(action.type);
 
   try {
-    const response = await fetch(`${EXTENSION_CONFIG.SERVER_BASE_URL}/api/execute`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, context: currentContext }),
-    });
+    // Route through background worker to bypass Gmail/Docs CSP
+    const result = await chrome.runtime.sendMessage({
+      topic: "fetch:execute",
+      payload: { action, context: currentContext },
+      timestamp: now(),
+    }) as { ok: boolean; data?: { output: string }; error?: string };
 
-    if (!response.ok) throw new Error(`Execution server error: ${response.status}`);
+    if (!result.ok) throw new Error(result.error ?? "Execution failed");
 
-    const result = await response.json() as { output: string };
+    const output = result.data?.output ?? "";
 
     // Execute the action in the DOM
-    await executionRunner.execute(action, result.output, currentContext);
+    await executionRunner.execute(action, output, currentContext);
 
     // Notify overlay with the result so it can display output or a success message
     document.dispatchEvent(new CustomEvent("follac:result", {
       detail: {
         actionId: action.id,
-        output: isDomWrite ? "✓ Applied to editor" : (result.output ?? "Done"),
+        output: isDomWrite ? "✓ Applied to editor" : (output ?? "Done"),
       },
     }));
 
