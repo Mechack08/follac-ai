@@ -157,8 +157,10 @@ async function proxyFetch(url: string, body: unknown): Promise<unknown> {
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    const text = await response.text().catch(() => "Unknown error");
-    throw new Error(`Server error ${response.status}: ${text}`);
+    // Extract the error.message field from JSON, or fall back to status text
+    const errJson = await response.json().catch(() => null) as { error?: string } | null;
+    const msg = errJson?.error ?? `Server error ${response.status}`;
+    throw new Error(msg);
   }
   return response.json();
 }

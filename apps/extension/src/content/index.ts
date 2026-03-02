@@ -141,8 +141,14 @@ async function handleActionApproved(action: ProposedAction): Promise<void> {
     sendToBackground({ topic: "action:completed", payload: action, timestamp: now() });
   } catch (err) {
     console.error("[Follac] Action execution failed:", err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const friendlyMsg = errMsg.includes("quota exceeded") || errMsg.includes("402")
+      ? "⚠ OpenAI quota exceeded — add credits at platform.openai.com"
+      : errMsg.includes("Invalid OpenAI") || errMsg.includes("401")
+      ? "⚠ Invalid OpenAI API key — check server .env file"
+      : `⚠ Error: ${errMsg.slice(0, 120)}`;
     document.dispatchEvent(new CustomEvent("follac:result", {
-      detail: { actionId: action.id, output: "⚠ Error: execution failed" },
+      detail: { actionId: action.id, output: friendlyMsg },
     }));
     sendToBackground({ topic: "action:failed", payload: action, timestamp: now() });
   }

@@ -103,7 +103,15 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
       return { result, tokenUsage };
     } catch (err) {
       fastify.log.error({ err }, "Execution agent LLM call failed");
-      return reply.status(500).send({ error: "Execution agent failed" });
+      const message = err instanceof Error ? err.message : String(err);
+      // Surface quota/auth errors clearly instead of a generic message
+      if (message.includes("insufficient_quota") || message.includes("429")) {
+        return reply.status(402).send({ error: "OpenAI quota exceeded — please add credits at platform.openai.com/settings/billing" });
+      }
+      if (message.includes("401") || message.includes("invalid_api_key")) {
+        return reply.status(401).send({ error: "Invalid OpenAI API key — check OPENAI_API_KEY in apps/server/.env" });
+      }
+      return reply.status(500).send({ error: `Execution agent failed: ${message}` });
     }
   });
 }
