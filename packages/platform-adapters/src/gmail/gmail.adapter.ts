@@ -150,7 +150,11 @@ export class GmailAdapter extends BaseAdapter {
   // ─── Private DOM Extraction Helpers ─────────────────────────────────────────
 
   private extractThreadId(): string | null {
-    const match = window.location.hash.match(/#(?:inbox|sent|spam)\/([a-f0-9]+)/);
+    // Modern Gmail uses base64url-encoded IDs (e.g. FMfcgzQfCDRsCKLd...)
+    // Old Gmail used lowercase hex. Match both.
+    const match = window.location.hash.match(
+      /#(?:inbox|sent|spam|trash|starred|all|label\/[^/]+)\/([A-Za-z0-9_+=-]+)/,
+    );
     return match?.[1] ?? null;
   }
 

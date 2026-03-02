@@ -19,7 +19,7 @@ export const EXTENSION_CONFIG = {
   DOM_DEBOUNCE_MS: 500,
 
   /** Minimum confidence to auto-show the overlay */
-  MIN_CONFIDENCE_TO_SHOW: 0.65,
+  MIN_CONFIDENCE_TO_SHOW: 0.5,
 
   /** How long to wait before re-analyzing context (ms) */
   CONTEXT_REFRESH_INTERVAL_MS: 3000,
