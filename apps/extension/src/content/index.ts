@@ -266,9 +266,18 @@ function handleActionRejected(actionId: string): void {
 // ─── Messaging ────────────────────────────────────────────────────────────────
 
 function sendToBackground(message: ExtensionMessage): void {
-  chrome.runtime.sendMessage(message).catch(() => {
-    // Service worker may be inactive — this is expected
-  });
+  try {
+    // chrome.runtime.sendMessage throws *synchronously* when the extension
+    // context is invalidated (e.g. after a dev reload). Wrapping in try/catch
+    // prevents that from becoming an unhandled promise rejection at call sites
+    // that invoke sendToBackground outside their own try/catch blocks.
+    chrome.runtime.sendMessage(message).catch(() => {
+      // Service worker may be inactive — this is expected
+    });
+  } catch {
+    // Extension context invalidated — the reload banner will be shown by
+    // whichever catch block detects the next chrome.runtime call failure.
+  }
 }
 
 // Handle messages FROM background or popup
