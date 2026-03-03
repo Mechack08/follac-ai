@@ -153,10 +153,52 @@ async function requestActions(context: ContextObject): Promise<void> {
     // Hiding on 0 actions would collapse the sidebar mid-execution if the
     // doc poll happens to return empty on a particular cycle.
   } catch (err) {
-    console.error("[Follac] Failed to request actions:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Extension context invalidated")) {
+      // The extension was reloaded while this tab was open.
+      // Show a one-time banner so the user knows to reload the tab.
+      showReloadBanner();
+    } else {
+      console.error("[Follac] Failed to request actions:", err);
+    }
   } finally {
     isProcessing = false;
   }
+}
+
+/** Show a non-blocking banner asking the user to reload the tab after an extension reload. */
+function showReloadBanner(): void {
+  if (document.getElementById("follac-reload-banner")) return; // already shown
+  const banner = document.createElement("div");
+  banner.id = "follac-reload-banner";
+  Object.assign(banner.style, {
+    position: "fixed",
+    bottom: "20px",
+    right: "20px",
+    zIndex: "2147483647",
+    background: "#1e293b",
+    border: "1px solid #475569",
+    borderRadius: "10px",
+    padding: "12px 16px",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+    fontFamily: "system-ui, sans-serif",
+    fontSize: "13px",
+    color: "#e2e8f0",
+    maxWidth: "320px",
+    cursor: "default",
+  });
+  banner.innerHTML = `
+    <span style="font-size:18px;flex-shrink:0">🔄</span>
+    <span><strong style="color:#fff">Follac was reloaded</strong> — reload this tab to reconnect.</span>
+    <button id="follac-reload-btn" style="margin-left:4px;padding:4px 10px;background:#3b82f6;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Reload</button>
+    <button id="follac-dismiss-btn" style="background:none;border:none;color:#94a3b8;font-size:16px;cursor:pointer;line-height:1;padding:0 2px">✕</button>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById("follac-reload-btn")?.addEventListener("click", () => location.reload());
+  document.getElementById("follac-dismiss-btn")?.addEventListener("click", () => banner.remove());
 }
 
 async function handleActionApproved(action: ProposedAction): Promise<void> {
@@ -195,6 +237,10 @@ async function handleActionApproved(action: ProposedAction): Promise<void> {
   } catch (err) {
     console.error("[Follac] Action execution failed:", err);
     const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes("Extension context invalidated")) {
+      showReloadBanner();
+      return;
+    }
     const friendlyMsg = errMsg.includes("quota exceeded") || errMsg.includes("402")
       ? "⚠ OpenAI quota exceeded — add credits at platform.openai.com"
       : errMsg.includes("Invalid OpenAI") || errMsg.includes("401")
