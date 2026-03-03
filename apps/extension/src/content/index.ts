@@ -108,11 +108,11 @@ async function requestActions(context: ContextObject): Promise<void> {
   if (isProcessing || isExecuting) return;
 
   // Skip if nothing meaningful changed since the last server call.
-  // This is the primary guard against duplicate requests from MutationObservers
-  // and selection-poll timers that fire when the page content hasn't changed.
+  // NOTE: we only commit the key on SUCCESS below — not here — so that a
+  // failed request (server down, network error) doesn't permanently block
+  // retries for the same context.
   const key = contextKey(context);
   if (key === lastContextKey) return;
-  lastContextKey = key;
 
   isProcessing = true;
 
@@ -130,6 +130,9 @@ async function requestActions(context: ContextObject): Promise<void> {
     }) as { ok: boolean; data?: { proposedActions: ProposedAction[] }; error?: string };
 
     if (!result.ok) throw new Error(result.error ?? "Orchestrate failed");
+
+    // Only lock the key once we have a good response — errors stay retryable.
+    lastContextKey = key;
 
     const actions = result.data?.proposedActions ?? [];
 
