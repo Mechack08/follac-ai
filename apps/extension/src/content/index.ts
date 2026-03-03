@@ -72,9 +72,12 @@ function contextKey(context: ContextObject): string {
     return `gmail:${context.pageType}:${url}:${draftLen}`;
   }
   if (context.platform === "google-docs") {
-    // Selection text (first 80 chars) distinguishes document vs selection actions.
+    // Include title and body availability so that when the Docs DOM loads after
+    // the first (empty) detection, the key changes and triggers a fresh call.
     const sel = String(d.selectedText ?? "").slice(0, 80);
-    return `docs:${context.pageType}:${url}:${sel}`;
+    const hasTitle = d.documentTitle ? "1" : "0";
+    const hasBody = d.bodyText ? "1" : "0";
+    return `docs:${context.pageType}:${url}:${hasTitle}:${hasBody}:${sel}`;
   }
   return `${context.platform}:${context.pageType}:${url}`;
 }
@@ -137,12 +140,13 @@ async function requestActions(context: ContextObject): Promise<void> {
 
     if (!result.ok) throw new Error(result.error ?? "Orchestrate failed");
 
-    // Only lock the key once we have a good response — errors stay retryable.
-    lastContextKey = key;
-
     const actions = result.data?.proposedActions ?? [];
 
     if (actions.length > 0) {
+      // Only lock the key once actions are actually shown — if the result is
+      // empty (e.g. DOM not ready on first Docs load), stay retryable so the
+      // next poll (title / body loaded) will try again.
+      lastContextKey = key;
       sendToBackground({ topic: "action:proposed", payload: actions, timestamp: now() });
       await overlayManager.injectIfNeeded();
       overlayManager.update(context, actions);
