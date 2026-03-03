@@ -27,7 +27,7 @@ adapterRegistry
   .register(new DocsAdapter())
   .register(new LinkedInAdapter());
 
-type ContextChangeHandler = (context: ContextObject) => void;
+type ContextChangeHandler = (context: ContextObject) => void | Promise<void>;
 
 export class PlatformDetector {
   private currentAdapter: PlatformAdapter | null = null;
@@ -111,7 +111,9 @@ export class PlatformDetector {
     try {
       const context = await this.currentAdapter.detectContext();
       if (context.confidenceScore >= EXTENSION_CONFIG.MIN_CONFIDENCE_TO_SHOW) {
-        this.onContextChange(context);
+        // Await so that any async rejection from the callback is caught by this
+        // try/catch rather than escaping as an unhandled promise rejection.
+        await this.onContextChange(context);
       }
     } catch (err) {
       console.error("[Follac] Context detection failed:", err);
