@@ -121,18 +121,28 @@ Return: { "result": "<markdown-formatted summary>" }`,
       "extract-tasks": `Extract all action items, tasks, decisions, and follow-ups.
 
 For Google Docs (context.platform === "google-docs"):
-  CASE A — action.payload.bodyText has content:
-    Scan it for TODOs, assignments, decisions, and language like "will", "should",
-    "need to", "action:", deadlines, owner names. Return a JSON array (may be []).
-  CASE B — bodyText is null/empty (canvas mode; text not accessible):
-    Return this exact message as the result string (NOT a JSON array):
-    "⚠ Document text not accessible in canvas mode.
+  Check action.payload.bodyText, action.payload.headings, and action.payload.documentTitle.
 
-To read this document's content, try either:
+  CASE A — bodyText has content (length > 0):
+    Scan it thoroughly for TODOs, assignments, decisions, and language like "will", "should",
+    "need to", "action:", deadlines, and owner names. Return a JSON array (may be empty []).
 
-**Option 1 — Quick:** Press **⌘A** (Mac) or **Ctrl+A** (Windows) to select all text, then click **Run** again.
+  CASE B — bodyText is null/empty but headings has items:
+    Inspect the headings for any action-oriented language (e.g. "TODO", "Action items",
+    "Next steps", "Follow-ups"). Extract plausible tasks from headings into a JSON array.
+    If no action items can be inferred from headings, return a JSON array [] and also
+    set a note field on the result explaining only headings were available.
 
-**Option 2 — Permanent:** In Google Docs open **Tools → Accessibility settings** → turn on **Screen reader support** → then click Run again. This enables full document access for all future Follac features."
+  CASE C — bodyText is null/empty AND headings is empty (title only or nothing):
+    The document text cannot be read in canvas mode.
+    Return this exact message as a plain result string (NOT a JSON array):
+    "**Action items could not be extracted** — the document body is not readable in standard Google Docs canvas mode.
+
+**To extract action items, choose one option:**
+
+**Option 1 — Quick (one-time):** Press **⌘A** (Mac) or **Ctrl+A** (Windows) to select all text, then click **Run** again.
+
+**Option 2 — Permanent:** Open **Tools → Accessibility settings** → enable **Screen reader support**. This gives Follac full document access automatically on every visit."
 
 For Gmail (context.platform === "gmail"):
   Focus on explicit requests, questions needing answers, and commitments made in the thread.
@@ -140,7 +150,7 @@ For Gmail (context.platform === "gmail"):
 
 JSON array format (when content is available):
 [{ "task": "description", "owner": "person name or 'Me' or null", "dueDate": "date or null", "priority": "high|medium|low" }]
-Return: { "result": "[JSON array as string]" }`,
+Return: { "result": "[JSON array as string]" } when returning tasks, or { "result": "<plain message string>" } for CASE C.`,
 
       "draft-email-compose": `Improve and refine the email draft.
 Fix grammar, improve clarity, and enhance professional tone.
