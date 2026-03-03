@@ -172,6 +172,28 @@ export class DocsAdapter extends BaseAdapter {
         confidence: 0.8,
         createdAt: now(),
       });
+
+      actions.push({
+        id: sid("write-section"),
+        type: "write-section",
+        title: "Continue writing",
+        description: docs.bodyText
+          ? "Generate the next section based on the document content"
+          : docs.headings.length > 0
+          ? "Write content for the next section based on the headings"
+          : `Continue drafting "${docs.documentTitle ?? "this document"}"`,
+        payload: {
+          documentId: docs.documentId,
+          documentTitle: docs.documentTitle,
+          bodyText: docs.bodyText ? docs.bodyText.slice(-2000) : null, // tail of doc for context
+          headings: docs.headings,
+          cursorContext: null, // populated in future when cursor position is detectable
+          instruction: null,
+        },
+        status: "pending",
+        confidence: 0.75,
+        createdAt: now(),
+      });
     }
 
     return actions.sort((a, b) => b.confidence - a.confidence).slice(0, 3);

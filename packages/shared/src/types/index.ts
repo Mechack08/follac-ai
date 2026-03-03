@@ -63,6 +63,7 @@ export type ActionType =
   | "compose-linkedin-message"
   | "generate-reply"
   | "rewrite-paragraph"
+  | "write-section"
   | "research-person"
   | "custom";
 

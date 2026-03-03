@@ -139,14 +139,14 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
         if (!action) return currentActions;
 
         if (isDisplayAction(action.type)) {
-          // ── Display action: always open in the ResultModal popup ───────
-          // This includes error messages (⚠) so they are readable, not
-          // flashed for 2s and dismissed.
+          // ── Display action: open in ResultModal; keep card so user can re-run ──
           const entry: ResultEntry = { id: actionId, action, output };
           document.dispatchEvent(
             new CustomEvent("follac:show-result", { detail: entry }),
           );
-          return currentActions.filter((a) => a.id !== actionId);
+          // Do NOT remove the card — executingId clears above, so the
+          // "Run →" button reappears and the user can run again.
+          return currentActions;
         }
 
         // ── DOM-write action (or error): show brief status, then auto-dismiss ──

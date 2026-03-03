@@ -214,6 +214,24 @@ Preserve the original meaning exactly. Do not add new facts or remove key points
 Return ONLY the rewritten text — no commentary, no quotes, no explanation.
 Return: { "result": "<rewritten text only>" }`,
 
+      "write-section": `Continue writing the document from where it leaves off, or develop the section the user has indicated.
+Available data (check action.payload):
+  - documentTitle  — the document title
+  - bodyText       — the current document content (may be null)
+  - headings       — section headings array (may be empty)
+  - cursorContext  — the paragraph immediately before the cursor (may be null)
+  - instruction    — any specific instruction from the user (may be null)
+
+Guidelines:
+  - Match the existing tone, style, and formatting of the document.
+  - If bodyText is available, seamlessly continue the content after the last paragraph.
+  - If only headings are available, write detailed content for the next logical section.
+  - If cursorContext is provided, continue directly from that paragraph.
+  - Write 1–3 substantial paragraphs — enough to be useful but not overwhelming.
+  - Plain prose only. No meta-commentary like "Here is the next section:". No markdown headers unless the doc already uses them.
+  - Return ONLY the text to insert — no preamble, no quotes, no explanation.
+Return: { "result": "<text to insert at cursor>" }`,
+
       "research-person": `Provide a concise professional summary based on available context.
 Include: current role, company, background, and potential talking points.
 Return: { "result": "<profile summary as markdown>" }`,

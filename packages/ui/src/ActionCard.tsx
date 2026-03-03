@@ -19,6 +19,7 @@ const ACTION_ICONS: Record<string, string> = {
   "extract-tasks": "✅",
   "compose-linkedin-message": "💬",
   "rewrite-paragraph": "🔄",
+  "write-section": "✏️",
   "research-person": "🔍",
   "custom": "⚡",
 };

@@ -23,6 +23,7 @@ export class ExecutionRunner {
     "generate-reply": this.openGmailReplyAndWrite.bind(this),
     "compose-linkedin-message": this.writeToLinkedInMessageBox.bind(this),
     "rewrite-paragraph": this.replaceSelectedText.bind(this),
+    "write-section": this.insertAtCursor.bind(this),
   };
 
   async execute(
@@ -144,7 +145,29 @@ export class ExecutionRunner {
     editor.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
-  // ─── Selected Text (Google Docs) ───────────────────────────────────────────
+  // ─── Google Docs text insertion ────────────────────────────────────────────
+
+  /**
+   * Insert AI-generated text at the current cursor position in Google Docs.
+   * Used for write-section (no prior selection needed).
+   */
+  private async insertAtCursor(output: string): Promise<void> {
+    // Ensure the Docs editor has focus before inserting
+    const editor = document.querySelector<HTMLElement>(
+      '[role="textbox"][contenteditable="true"], .kix-canvas-tile-content',
+    );
+    editor?.focus();
+
+    const success = document.execCommand("insertText", false, output);
+    if (success) return;
+
+    // Fallback: clipboard so user can Cmd+V
+    try {
+      await navigator.clipboard.writeText(output);
+    } catch (err) {
+      console.warn("[Follac] Clipboard write failed:", err);
+    }
+  }
 
   private async replaceSelectedText(output: string): Promise<void> {
     // Google Docs uses a canvas-based editor.
