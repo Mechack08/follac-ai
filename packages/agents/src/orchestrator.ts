@@ -43,42 +43,40 @@ export class AgentOrchestrator {
 
   /**
    * Run the full context → actions pipeline.
-   * If adapterActions are provided (from the client-side platform adapter),
-   * they are used directly — skipping the ActionAgent LLM call for reliability.
+   *
+   * Fast path (adapterActions provided):
+   *   The client-side adapter already proposed deterministic actions. We skip
+   *   BOTH the ContextAgent and ActionAgent LLM calls — they add latency and
+   *   token cost but their output (contextAnalysis) is not used by the extension
+   *   for rendering action cards. Only ResearchAgent runs (LinkedIn only).
+   *
+   * Slow path (no adapterActions):
+   *   Run ContextAgent → ActionAgent (parallel with ResearchAgent if needed).
+   *   Used for platforms without a registered adapter.
    */
   async analyze(context: ContextObject, adapterActions?: ProposedAction[]): Promise<OrchestratorResult> {
     const pipelineStart = performance.now();
-    const baseRequest: AgentRequest = {
-      agentType: "context",
-      context,
-    };
 
-    // Step 1 — Context analysis (always runs — enriches intent/entities)
-    const contextResponse = await this.contextAgent.run(baseRequest);
-    const contextAnalysis = contextResponse.data;
-
-    // Step 2 — Actions: use adapter-proposed actions if available (faster + deterministic)
-    //           Otherwise fall back to ActionAgent LLM call
-    const researchNeeded = this.shouldRunResearch(context);
-
-    let proposedActions: ProposedAction[];
-
+    // ── Fast path: adapter actions already determined client-side ─────────────
     if (adapterActions && adapterActions.length > 0) {
-      // Use the deterministic adapter actions and run research in parallel if needed
+      const researchNeeded = this.shouldRunResearch(context);
       const researchResponse = researchNeeded
         ? await this.researchAgent.run({ agentType: "research", context })
         : null;
-      proposedActions = adapterActions;
-      const totalLatencyMs = Math.round(performance.now() - pipelineStart);
       return {
-        contextAnalysis,
-        proposedActions,
+        contextAnalysis: null,
+        proposedActions: adapterActions,
         research: researchResponse?.data ?? null,
-        totalLatencyMs,
+        totalLatencyMs: Math.round(performance.now() - pipelineStart),
       };
     }
 
-    // Fallback: LLM-generated actions
+    // ── Slow path: no adapter actions — run full LLM pipeline ─────────────────
+    const baseRequest: AgentRequest = { agentType: "context", context };
+    const contextResponse = await this.contextAgent.run(baseRequest);
+    const contextAnalysis = contextResponse.data;
+
+    const researchNeeded = this.shouldRunResearch(context);
     const [actionResponse, researchResponse] = await Promise.all([
       this.actionAgent.run({ agentType: "action", context }),
       researchNeeded
@@ -86,13 +84,11 @@ export class AgentOrchestrator {
         : Promise.resolve(null),
     ]);
 
-    const totalLatencyMs = Math.round(performance.now() - pipelineStart);
-
     return {
       contextAnalysis,
       proposedActions: actionResponse.data ?? [],
       research: researchResponse?.data ?? null,
-      totalLatencyMs,
+      totalLatencyMs: Math.round(performance.now() - pipelineStart),
     };
   }
 

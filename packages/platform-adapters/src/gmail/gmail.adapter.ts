@@ -1,6 +1,6 @@
 import { BaseAdapter } from "../base.adapter.js";
 import type { ContextObject, ProposedAction, GmailContext } from "@follac/shared";
-import { generateId, now } from "@follac/shared";
+import { now } from "@follac/shared";
 
 /**
  * GmailAdapter
@@ -90,9 +90,15 @@ export class GmailAdapter extends BaseAdapter {
     const gmail = context.extractedData as unknown as GmailContext;
     const actions: ProposedAction[] = [];
 
+    // Stable IDs: keyed to thread/compose content so re-detections produce
+    // identical IDs — result events always find their action card even if
+    // MutationObserver fires between clicking Run and receiving the result.
+    const sid = (type: string) =>
+      `gmail-${gmail.threadId ?? context.pageType}-${type}`;
+
     if (context.pageType === "email-thread" && gmail.subject) {
       actions.push({
-        id: generateId(),
+        id: sid("summarize-thread"),
         type: "summarize-thread",
         title: "Summarize this thread",
         description: `Get a concise summary of "${gmail.subject}"`,
@@ -103,7 +109,7 @@ export class GmailAdapter extends BaseAdapter {
       });
 
       actions.push({
-        id: generateId(),
+        id: sid("generate-reply"),
         type: "generate-reply",
         title: "Draft a reply",
         description: "Generate a contextual reply to this email",
@@ -119,7 +125,7 @@ export class GmailAdapter extends BaseAdapter {
       });
 
       actions.push({
-        id: generateId(),
+        id: sid("extract-tasks"),
         type: "extract-tasks",
         title: "Extract action items",
         description: "Pull out tasks and follow-ups from this thread",
@@ -132,7 +138,7 @@ export class GmailAdapter extends BaseAdapter {
 
     if (context.pageType === "email-compose" && gmail.composeDraft) {
       actions.push({
-        id: generateId(),
+        id: sid("draft-email"),
         type: "draft-email",
         title: "Improve this draft",
         description: "Refine tone, clarity, and structure of your draft",

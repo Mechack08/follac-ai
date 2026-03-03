@@ -49,6 +49,31 @@ let currentContext: ContextObject | null = null;
 let isProcessing = false;
 /** True while an action execution (LLM call + DOM write) is in flight. */
 let isExecuting = false;
+/**
+ * Fingerprint of the last context sent to the server.
+ * Prevents duplicate /orchestrate calls when the adapter fires but nothing
+ * meaningful changed (e.g. same email thread, same Docs selection).
+ */
+let lastContextKey = "";
+
+/**
+ * Derive a short stable key from the context's meaningful fields.
+ * Only changes when content the LLM actually needs changes.
+ */
+function contextKey(context: ContextObject): string {
+  const d = context.extractedData as Record<string, unknown>;
+  if (context.platform === "gmail") {
+    // Key on thread/compose content — ignore UI-only mutations
+    const draft = String(d.composeDraft ?? "");
+    return `gmail:${context.pageType}:${String(d.threadId ?? "")}:${String(d.isComposing)}:${draft.length}`;
+  }
+  if (context.platform === "google-docs") {
+    // Key on document + selection — ignore cursor blink / scroll
+    const sel = String(d.selectedText ?? "");
+    return `docs:${context.pageType}:${String(d.documentId ?? "")}:${sel.slice(0, 80)}`;
+  }
+  return `${context.platform}:${context.pageType}`;
+}
 
 // ─── Start Detection ──────────────────────────────────────────────────────────
 
@@ -71,6 +96,8 @@ window.addEventListener("follac:navigate", () => {
   // Signal loading state immediately so the overlay shows a spinner,
   // not stale action cards from the previous email.
   document.dispatchEvent(new CustomEvent("follac:loading"));
+  // Reset fingerprint so the new page always triggers a server call.
+  lastContextKey = "";
   platformDetector.initialize(window.location.href);
 });
 
@@ -78,9 +105,15 @@ window.addEventListener("follac:navigate", () => {
 
 async function requestActions(context: ContextObject): Promise<void> {
   // Never replace action cards while the user is waiting for an execution result.
-  // Doing so would assign new IDs to the same actions, causing the result event
-  // to find no matching action and silently discard the output.
   if (isProcessing || isExecuting) return;
+
+  // Skip if nothing meaningful changed since the last server call.
+  // This is the primary guard against duplicate requests from MutationObservers
+  // and selection-poll timers that fire when the page content hasn't changed.
+  const key = contextKey(context);
+  if (key === lastContextKey) return;
+  lastContextKey = key;
+
   isProcessing = true;
 
   try {
