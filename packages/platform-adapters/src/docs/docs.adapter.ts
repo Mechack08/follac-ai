@@ -26,6 +26,7 @@ export class DocsAdapter extends BaseAdapter {
 
   private observer: MutationObserver | null = null;
   private selectionInterval: ReturnType<typeof setInterval> | null = null;
+  private lastSelection = "";
 
   canHandle(url: string): boolean {
     return /^https:\/\/docs\.google\.com\/document\//.test(url);
@@ -34,26 +35,28 @@ export class DocsAdapter extends BaseAdapter {
   /**
    * Observe:
    *  - Title element changes (document rename)
-   *  - Main editor mutations (content edits, paragraph insertion)
-   *  - Selection polling every 2s (canvas limitation — no selectionchange event)
+   *  - Selection polling every 2s — but ONLY fires callback when selection changes.
+   *    The editor container is intentionally NOT observed: Google Docs canvas mode
+   *    re-renders DOM tiles constantly (cursor blinks, scroll, tile swaps), which
+   *    would trigger hundreds of server requests per minute.
    */
   observe(onChangeCallback: () => void): void {
-    // Watch title for renames
+    // Watch title for renames — fires rarely, safe to observe
     const titleEl = document.querySelector(".docs-title-input-label-inner, #docs-title-widget");
     if (titleEl) {
       this.observer = new MutationObserver(onChangeCallback);
       this.observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
     }
 
-    // Also watch the editor container for content changes
-    const editorEl = document.querySelector(".kix-appview-editor, .docs-texteventtarget-iframe");
-    if (editorEl && !this.observer) {
-      this.observer = new MutationObserver(onChangeCallback);
-      this.observer.observe(editorEl, { childList: true, subtree: true });
-    }
-
-    // Poll selection every 2s — canvas doesn't fire selectionchange reliably
-    this.selectionInterval = setInterval(onChangeCallback, 2000);
+    // Poll selection every 2s, but ONLY notify when it actually changes.
+    // This surfaces the "Rewrite selection" action without hammering the server.
+    this.selectionInterval = setInterval(() => {
+      const current = this.extractSelectedText() ?? "";
+      if (current !== this.lastSelection) {
+        this.lastSelection = current;
+        onChangeCallback();
+      }
+    }, 2000);
   }
 
   override teardown(): void {
@@ -63,6 +66,7 @@ export class DocsAdapter extends BaseAdapter {
       clearInterval(this.selectionInterval);
       this.selectionInterval = null;
     }
+    this.lastSelection = "";
   }
 
   async extractData(): Promise<Record<string, unknown>> {
