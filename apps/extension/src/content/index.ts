@@ -116,7 +116,7 @@ async function handleActionApproved(action: ProposedAction): Promise<void> {
   sendToBackground({ topic: "action:approved", payload: action, timestamp: now() });
 
   // DOM-writing actions: result is applied directly to the page editor
-  const isDomWrite = (["draft-email", "generate-reply", "compose-linkedin-message", "rewrite-paragraph"] as string[]).includes(action.type);
+  const isDomWrite = (["draft-email", "generate-reply", "compose-linkedin-message"] as string[]).includes(action.type);
 
   try {
     // Route through background worker to bypass Gmail/Docs CSP

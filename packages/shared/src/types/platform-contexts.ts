@@ -22,6 +22,10 @@ export interface DocsContext {
   documentId: string | null;
   documentTitle: string | null;
   selectedText: string | null;
+  /** Full document body text, extracted from the accessible DOM layer. */
+  bodyText: string | null;
+  /** Heading titles extracted from the document structure. */
+  headings: string[];
   cursorParagraph: string | null;
   wordCount: number | null;
   lastEditedBy: string | null;

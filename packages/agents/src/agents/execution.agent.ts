@@ -118,10 +118,11 @@ Format your response as:
 **Sentiment:** [Positive / Neutral / Needs Attention]
 Return: { "result": "<markdown-formatted summary>" }`,
 
-      "extract-tasks": `Extract all action items, tasks, and follow-ups from this email thread.
-Return a JSON array of tasks:
-[{ "task": "description", "owner": "person name or 'Me'", "dueDate": "date or null", "priority": "high|medium|low" }]
-Focus on explicit requests, questions needing answers, and commitments made.
+      "extract-tasks": `Extract all action items, tasks, and follow-ups.
+If context.platform is "google-docs": read from action.payload.bodyText. Look for TODOs, assignments, decisions, and language like "will", "should", "need to", "action:", deadlines, etc.
+Otherwise (email thread): focus on explicit requests, questions needing answers, and commitments made.
+Return a JSON array:
+[{ "task": "description", "owner": "person name or 'Me' or null", "dueDate": "date or null", "priority": "high|medium|low" }]
 Return: { "result": "[JSON array as string]" }`,
 
       "draft-email-compose": `Improve and refine the email draft.
@@ -129,8 +130,17 @@ Fix grammar, improve clarity, and enhance professional tone.
 Keep the same intent and main message.
 Return: { "result": "<refined email as plain text>" }`,
 
-      "summarize-document": `Provide a structured summary of this document.
-Format: Introduction paragraph + bullet-point key sections + conclusion.
+      "summarize-document": `Provide a structured summary of the document.
+You will find the document content in action.payload.bodyText and section headings in action.payload.headings.
+If bodyText is null, base your summary on the documentTitle and available context.
+Format:
+**Overview:** One-paragraph summary of the document's purpose and scope.
+
+**Key Sections:**
+• <heading or section title>: <what it covers>
+• (one bullet per major section, based on headings or identified structure)
+
+**Takeaways:** 2–3 concise conclusions or decisions from the document.
 Return: { "result": "<markdown summary>" }`,
 
       "compose-linkedin-message": `Write a natural, professional LinkedIn message.
@@ -138,9 +148,11 @@ Keep it brief (3-5 sentences), personalized, and not salesy.
 Focus on genuine connection or a clear, respectful ask.
 Return: { "result": "<message text>" }`,
 
-      "rewrite-paragraph": `Rewrite the selected text to be clearer and more professional.
-Preserve the original meaning. Return only the rewritten text, no commentary.
-Return: { "result": "<rewritten text>" }`,
+      "rewrite-paragraph": `Rewrite the selected text to be clearer, more concise, and more professional.
+The original text is in action.payload.selectedText. Document title (for tonal context) is in action.payload.documentTitle.
+Preserve the original meaning exactly. Do not add new facts or remove key points.
+Return ONLY the rewritten text — no commentary, no quotes, no explanation.
+Return: { "result": "<rewritten text only>" }`,
 
       "research-person": `Provide a concise professional summary based on available context.
 Include: current role, company, background, and potential talking points.

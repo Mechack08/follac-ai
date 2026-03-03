@@ -147,23 +147,23 @@ export class ExecutionRunner {
   // ─── Selected Text (Google Docs) ───────────────────────────────────────────
 
   private async replaceSelectedText(output: string): Promise<void> {
-    // Google Docs uses a canvas-based editor. Native execCommand is limited.
-    // We use document.execCommand for text replacement in accessible mode.
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      console.warn("[Follac] No text selected for replacement");
+    // Google Docs uses a canvas-based editor.
+    // Attempt 1: execCommand (works in Docs accessible / A11y editing mode)
+    const success = document.execCommand("insertText", false, output);
+
+    if (success) {
+      console.log("[Follac] Text replaced via execCommand");
       return;
     }
 
-    // Attempt execCommand (works in some Docs accessibility modes)
-    const success = document.execCommand("insertText", false, output);
-
-    if (!success) {
-      console.warn(
-        "[Follac] execCommand failed — Docs may be in canvas mode. " +
-          "Showing output in overlay instead.",
-      );
-      // Fall back: the output will be shown in the overlay panel for manual copy
+    // Attempt 2: clipboard fallback — copy the rewritten text silently so the
+    // user can paste it with Cmd+V to replace the selection manually.
+    try {
+      await navigator.clipboard.writeText(output);
+      console.log("[Follac] Copied rewritten text to clipboard (execCommand unavailable)");
+    } catch (err) {
+      console.warn("[Follac] Clipboard write failed:", err);
     }
+    // Either way the result modal will display the output for manual copy.
   }
 }

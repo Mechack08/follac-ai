@@ -44,6 +44,7 @@ export const DISPLAY_ACTION_TYPES = new Set([
   "summarize-document",
   "extract-tasks",
   "research-person",
+  "rewrite-paragraph",
 ]);
 
 export const isDisplayAction = (type: string): boolean =>
@@ -238,13 +239,26 @@ function ModalCard({
 
         {/* ── Footer ───────────────────────────────────────────────── */}
         {!isError && (
-          <div className="px-5 py-3 bg-slate-800/60 border-t border-slate-700/60 flex-shrink-0">
+          <div className="px-5 py-3 bg-slate-800/60 border-t border-slate-700/60 flex-shrink-0 space-y-2">
             <button
               onClick={handleCopy}
               className="w-full py-2 text-[12px] font-medium rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-follac-500/50 text-slate-300 hover:text-white transition-all"
             >
               {copied ? "✓  Copied to clipboard" : "📋  Copy"}
             </button>
+            {action.type === "rewrite-paragraph" && (
+              <p className="text-center text-[11px] text-slate-500">
+                💡 Rewritten text copied to clipboard — select your original text and press{" "}
+                <kbd className="bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-[10px] text-slate-300">
+                  ⌘V
+                </kbd>{" "}
+                /{" "}
+                <kbd className="bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-[10px] text-slate-300">
+                  Ctrl+V
+                </kbd>{" "}
+                to replace it
+              </p>
+            )}
           </div>
         )}
       </div>
