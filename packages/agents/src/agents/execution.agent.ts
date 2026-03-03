@@ -119,12 +119,18 @@ Format your response as:
 Return: { "result": "<markdown-formatted summary>" }`,
 
       "extract-tasks": `Extract all action items, tasks, and follow-ups.
-For Google Docs (context.platform === "google-docs"): read text from action.payload.bodyText.
-  - IMPORTANT: If action.payload.bodyText is null or empty AND action.payload.headings is empty,
-    return { "result": "⚠ Document content not accessible. In Google Docs, go to **Tools → Accessibility settings** and enable **Screen reader support**, then retry Follac." }
-  - Otherwise look for TODOs, assignments, decisions, and language like "will", "should", "need to", "action:", deadlines, etc.
+
+For Google Docs (context.platform === "google-docs"):
+  - If action.payload.bodyText has content: scan it for TODOs, assignments, decisions, and
+    language like "will", "should", "need to", "action:", deadlines, owner names, etc.
+    Return a JSON array (may be empty [] if none found).
+  - If action.payload.bodyText is null/empty: return the plain string result:
+    "⚠ Document text not accessible — Follac could not read the page content.\n\nTo fix: in Google Docs open **Tools → Accessibility settings** and turn on **Screen reader support**, then click Run again."
+    (Return this as the result string, not a JSON array.)
+
 For Gmail (context.platform === "gmail"): focus on explicit requests, questions, and commitments.
-Return a JSON array of tasks (may be empty [] if none found):
+
+When returning tasks, use this JSON array format:
 [{ "task": "description", "owner": "person name or 'Me' or null", "dueDate": "date or null", "priority": "high|medium|low" }]
 Return: { "result": "[JSON array as string]" }`,
 
@@ -134,18 +140,25 @@ Keep the same intent and main message.
 Return: { "result": "<refined email as plain text>" }`,
 
       "summarize-document": `Provide a structured summary of the document.
-The document body text is in action.payload.bodyText (may be null if Google Docs canvas is inaccessible)
-and section headings are in action.payload.headings (may be empty array).
-IMPORTANT: If bodyText is null or empty AND headings is an empty array, return exactly:
-{ "result": "⚠ Document content not accessible. In Google Docs, go to **Tools → Accessibility settings** and enable **Screen reader support**, then retry Follac." }
-Otherwise format the summary as:
-**Overview:** One-paragraph summary of the document's purpose and scope.
+Available data (use whatever is present):
+  - action.payload.documentTitle — document title
+  - action.payload.bodyText      — full body text (may be null if Docs canvas is inaccessible)
+  - action.payload.headings      — array of section headings (may be empty)
+
+Rules:
+1. If bodyText has content — write a full summary from it.
+2. If bodyText is null/empty but headings exist — summarise based on the headings alone, noting the sections present.
+3. If bodyText is null/empty AND headings is empty — write a one-paragraph summary based on the documentTitle, then add this note on a new line:
+   > 💡 Tip: For a richer summary, open **Tools → Accessibility settings → Screen reader support** in Google Docs and click Run again.
+4. If no title, body, or headings are available — return "⚠ No document content found. Please open a Google Doc and try again."
+
+Always use this format when content is available:
+**Overview:** One-paragraph summary.
 
 **Key Sections:**
-• <heading or section title>: <what it covers>
-• (one bullet per major section)
+• <section>: <what it covers>
 
-**Takeaways:** 2–3 concise conclusions or decisions.
+**Takeaways:** 2–3 conclusions.
 Return: { "result": "<markdown summary>" }`,
 
       "compose-linkedin-message": `Write a natural, professional LinkedIn message.

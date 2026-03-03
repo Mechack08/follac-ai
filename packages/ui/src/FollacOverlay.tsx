@@ -116,8 +116,10 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
         const action = currentActions.find((a) => a.id === actionId);
         if (!action) return currentActions;
 
-        if (isDisplayAction(action.type) && !output.startsWith("⚠")) {
-          // ── Display action: open in the ResultModal popup ──────────────
+        if (isDisplayAction(action.type)) {
+          // ── Display action: always open in the ResultModal popup ───────
+          // This includes error messages (⚠) so they are readable, not
+          // flashed for 2s and dismissed.
           const entry: ResultEntry = { id: actionId, action, output };
           document.dispatchEvent(
             new CustomEvent("follac:show-result", { detail: entry }),
