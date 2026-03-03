@@ -245,10 +245,25 @@ export class DocsAdapter extends BaseAdapter {
       if (text.length > 50) return text.slice(0, 10000);
     }
 
-    // Strategy 4: aria textbox layer (only present when Screen Reader Support is on)
-    const textbox = document.querySelector<HTMLElement>('[role="textbox"]');
-    if (textbox?.textContent?.trim() && textbox.textContent.trim().length > 50) {
-      return textbox.textContent.trim().slice(0, 10000);
+    // Strategy 4: aria textbox layer — Screen Reader Support mode.
+    // Docs creates one [role="textbox"] per paragraph/tile; we must collect ALL
+    // of them, not just the first one (which is often the title field, ~0 chars).
+    const textboxes = document.querySelectorAll<HTMLElement>('[role="textbox"]');
+    if (textboxes.length > 0) {
+      const text = Array.from(textboxes)
+        .map((el) => el.textContent ?? "")
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      if (text.length > 10) return text.slice(0, 10000);
+    }
+
+    // Strategy 4b: accessibility manager container (Google Docs internal layer)
+    const a11yContainer = document.querySelector<HTMLElement>(
+      ".kix-accessibilitymanager-container, [aria-label*='Document content' i], [aria-label*='Body' i][contenteditable]",
+    );
+    if (a11yContainer?.textContent?.trim() && a11yContainer.textContent.trim().length > 10) {
+      return a11yContainer.textContent.trim().slice(0, 10000);
     }
 
     // Strategy 5: use window.getSelection() if user selected a large portion (⌘A).
