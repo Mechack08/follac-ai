@@ -29,9 +29,10 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
   const [executingId, setExecutingId] = useState<string | null>(null);
   const [successMap, setSuccessMap] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  /** Incremented on each context update — forces cards to re-animate */
+  /** Incremented only when action types change — prevents blinking on poll-only updates */
   const generationRef = useRef(0);
   const [generation, setGeneration] = useState(0);
+  const actionFingerprintRef = useRef("");
 
   // ── Loading state (navigation started, waiting for new actions) ─────────
   useEffect(() => {
@@ -66,12 +67,19 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
       }>).detail;
       setContext(ctx);
       setActions(acts);
-      setSuccessMap({});
-      setExecutingId(null);
       setIsLoading(false);
-      generationRef.current += 1;
-      setGeneration(generationRef.current);
       setIsSidebarVisible(true);
+      // Only re-animate cards and reset execution state when the set of action
+      // *types* meaningfully changes (e.g. a new email opened), not on every
+      // poll-driven re-detect where the same doc produces the same actions.
+      const fingerprint = acts.map((a) => a.type).join(",");
+      if (fingerprint !== actionFingerprintRef.current) {
+        actionFingerprintRef.current = fingerprint;
+        setSuccessMap({});
+        setExecutingId(null);
+        generationRef.current += 1;
+        setGeneration(generationRef.current);
+      }
     };
     document.addEventListener("follac:update", handler);
     return () => document.removeEventListener("follac:update", handler);

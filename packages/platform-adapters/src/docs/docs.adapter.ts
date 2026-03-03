@@ -1,6 +1,6 @@
 import { BaseAdapter } from "../base.adapter.js";
 import type { ContextObject, ProposedAction, DocsContext } from "@follac/shared";
-import { generateId, now } from "@follac/shared";
+import { now } from "@follac/shared";
 
 /**
  * DocsAdapter
@@ -106,11 +106,16 @@ export class DocsAdapter extends BaseAdapter {
   async proposeActions(context: ContextObject): Promise<ProposedAction[]> {
     const docs = context.extractedData as unknown as DocsContext;
     const actions: ProposedAction[] = [];
+    // Stable IDs: keyed to document + action type so re-polls produce the
+    // same ID as the action the user already clicked, preventing result IDs
+    // from going stale mid-execution.
+    const sid = (type: string) =>
+      `docs-${docs.documentId ?? "unknown"}-${type}`;
 
     // ── Selection-based actions (highest priority) ────────────────────────────
     if (docs.selectedText && docs.selectedText.length > 30) {
       actions.push({
-        id: generateId(),
+        id: sid("rewrite-paragraph"),
         type: "rewrite-paragraph",
         title: "Rewrite selection",
         description: `Improve clarity and tone of the selected ${this.selectionWordCount(docs.selectedText)}-word passage`,
@@ -129,7 +134,7 @@ export class DocsAdapter extends BaseAdapter {
       const wordInfo = docs.wordCount ? ` (${docs.wordCount.toLocaleString()} words)` : "";
 
       actions.push({
-        id: generateId(),
+        id: sid("summarize-document"),
         type: "summarize-document",
         title: "Summarize document",
         description: `Create a structured summary of "${docs.documentTitle ?? "this document"}"${wordInfo}`,
@@ -146,7 +151,7 @@ export class DocsAdapter extends BaseAdapter {
       });
 
       actions.push({
-        id: generateId(),
+        id: sid("extract-tasks"),
         type: "extract-tasks",
         title: "Extract action items",
         description: "Find tasks, decisions, and follow-up items in this document",

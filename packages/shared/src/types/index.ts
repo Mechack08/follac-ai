@@ -14,6 +14,7 @@ export type PageType =
   | "email-thread"
   | "email-compose"
   | "document"
+  | "document-with-selection"
   | "profile"
   | "feed"
   | "job-listing"

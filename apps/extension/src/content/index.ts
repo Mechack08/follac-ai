@@ -47,6 +47,8 @@ const platformDetector = new PlatformDetector(async (context: ContextObject) => 
 
 let currentContext: ContextObject | null = null;
 let isProcessing = false;
+/** True while an action execution (LLM call + DOM write) is in flight. */
+let isExecuting = false;
 
 // ─── Start Detection ──────────────────────────────────────────────────────────
 
@@ -75,7 +77,10 @@ window.addEventListener("follac:navigate", () => {
 // ─── Action Pipeline ──────────────────────────────────────────────────────────
 
 async function requestActions(context: ContextObject): Promise<void> {
-  if (isProcessing) return;
+  // Never replace action cards while the user is waiting for an execution result.
+  // Doing so would assign new IDs to the same actions, causing the result event
+  // to find no matching action and silently discard the output.
+  if (isProcessing || isExecuting) return;
   isProcessing = true;
 
   try {
@@ -113,6 +118,7 @@ async function requestActions(context: ContextObject): Promise<void> {
 async function handleActionApproved(action: ProposedAction): Promise<void> {
   if (!currentContext) return;
 
+  isExecuting = true;
   sendToBackground({ topic: "action:approved", payload: action, timestamp: now() });
 
   // DOM-writing actions: result is applied directly to the page editor
@@ -154,6 +160,8 @@ async function handleActionApproved(action: ProposedAction): Promise<void> {
       detail: { actionId: action.id, output: friendlyMsg },
     }));
     sendToBackground({ topic: "action:failed", payload: action, timestamp: now() });
+  } finally {
+    isExecuting = false;
   }
 }
 
