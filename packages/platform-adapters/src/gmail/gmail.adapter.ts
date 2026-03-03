@@ -176,43 +176,91 @@ export class GmailAdapter extends BaseAdapter {
     return pageTitle || null;
   }
 
+  /**
+   * Find the message container the user is currently focused on.
+   *
+   * Priority:
+   *  1. `.kv` — Gmail's "highlighted" class placed on the focused/clicked message
+   *  2. Last expanded message (has a visible `.a3s.aiL` body) — Gmail always
+   *     auto-expands the most recently clicked message at the bottom of a thread
+   *  3. Any expanded message — fallback
+   */
+  private findFocusedMessage(): Element | null {
+    // 1. Gmail marks the actively focused message with .kv
+    const kvEl = this.querySelector(".kv");
+    if (kvEl) {
+      // .kv sits on an inner span; walk up to the .gs message container
+      const gsAncestor = kvEl.closest(".gs");
+      if (gsAncestor) return gsAncestor;
+    }
+
+    // 2. All messages that have an expanded body (.a3s.aiL visible)
+    const allContainers = this.querySelectorAll<HTMLElement>(".gs");
+    const expanded = allContainers.filter(
+      (el) => el.querySelector(".a3s.aiL") !== null,
+    );
+
+    // Return the LAST expanded message — Gmail always opens the focused one last
+    if (expanded.length > 0) return expanded[expanded.length - 1];
+
+    // 3. Any message container at all
+    return allContainers[allContainers.length - 1] ?? null;
+  }
+
   private extractSenderName(): string | null {
-    // Try the sender span in expanded view
+    const root = this.findFocusedMessage() ?? document;
     return (
+      this.getTextContent(".gD[email]", root) ||
+      this.getTextContent(".go", root) ||
+      this.getAttribute(".iw span[email]", "name", root) ||
+      // Fallback to page-level if focused container yields nothing
       this.getTextContent(".gD[email]") ||
-      this.getTextContent(".go") ||
-      this.getAttribute(".iw span[email]", "name") ||
       null
     );
   }
 
   private extractSenderEmail(): string | null {
-    return this.getAttribute(".gD[email]", "email");
+    const root = this.findFocusedMessage() ?? document;
+    return (
+      this.getAttribute(".gD[email]", "email", root) ??
+      // Fallback to page-level
+      this.getAttribute(".gD[email]", "email")
+    );
   }
 
   private extractRecipientEmails(): string[] {
-    const elements = this.querySelectorAll<HTMLElement>(".g2[email]");
+    const root = this.findFocusedMessage() ?? document;
+    const elements = this.querySelectorAll<HTMLElement>(".g2[email]", root);
     return elements
       .map((el) => el.getAttribute("email"))
       .filter((e): e is string => e !== null);
   }
 
   private extractBodyPreview(): string | null {
-    // Collect all expanded message bodies in the thread (most complete view)
+    const focused = this.findFocusedMessage();
+
+    // Primary: body of the focused/clicked message
+    if (focused) {
+      const focusedBody = this.querySelector<HTMLElement>(".a3s.aiL", focused);
+      if (focusedBody?.textContent?.trim()) {
+        const text = focusedBody.textContent.replace(/\s+/g, " ").trim();
+        if (text.length > 0) return text.slice(0, 5000);
+      }
+    }
+
+    // Secondary: all expanded bodies concatenated (thread context for the LLM)
     const bodies = this.querySelectorAll<HTMLElement>(".a3s.aiL");
     if (!bodies.length) {
-      // Fallback: get any visible quoted/preview text
+      // Fallback: visible preview snippet
       const preview = this.getTextContent(".y6");
       return preview?.slice(0, 3000) ?? null;
     }
 
-    // Concatenate all messages with separator, newest at bottom (Gmail default order)
     const allText = bodies
       .map((el) => el.textContent?.replace(/\s+/g, " ").trim() ?? "")
       .filter(Boolean)
-      .join("\n\n--- Next message ---\n\n");
+      .join("\n\n--- Previous message ---\n\n");
 
-    // Cap at 5000 chars to keep prompts reasonable
     return allText.slice(0, 5000) || null;
   }
 

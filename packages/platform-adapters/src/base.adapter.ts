@@ -98,6 +98,7 @@ export abstract class BaseAdapter implements PlatformAdapter {
 
   /**
    * Get an attribute value from an element. Returns null if missing.
+   * Overload accepts an optional root scope (same as querySelector).
    */
   protected getAttribute(selector: string, attr: string, root?: Element | Document): string | null {
     const el = this.querySelector(selector, root);
