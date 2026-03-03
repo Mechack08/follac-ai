@@ -151,7 +151,7 @@ export class ExecutionRunner {
    * Insert AI-generated text at the current cursor position in Google Docs.
    * Used for write-section (no prior selection needed).
    */
-  private async insertAtCursor(output: string): Promise<void> {
+  async insertAtCursor(output: string): Promise<void> {
     // Ensure the Docs editor has focus before inserting
     const editor = document.querySelector<HTMLElement>(
       '[role="textbox"][contenteditable="true"], .kix-canvas-tile-content',

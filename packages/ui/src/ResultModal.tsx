@@ -27,6 +27,7 @@ const ACTION_ICONS: Record<string, string> = {
   "generate-reply": "↩️",
   "compose-linkedin-message": "💬",
   "rewrite-paragraph": "🔄",
+  "write-section": "✏️",
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -45,6 +46,7 @@ export const DISPLAY_ACTION_TYPES = new Set([
   "extract-tasks",
   "research-person",
   "rewrite-paragraph",
+  "write-section",
 ]);
 
 export const isDisplayAction = (type: string): boolean =>
@@ -168,15 +170,20 @@ function TaskList({ tasks }: { tasks: Task[] }) {
 function ModalCard({
   entry,
   onClose,
+  onInsert,
+  onRetry,
 }: {
   entry: ResultEntry;
   onClose: () => void;
+  onInsert?: (output: string, action: ProposedAction) => void;
+  onRetry?: (action: ProposedAction) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const { action, output } = entry;
   const icon = ACTION_ICONS[action.type] ?? "⚡";
   const isError = output.startsWith("⚠");
   const tasks = action.type === "extract-tasks" ? tryParseTasks(output) : null;
+  const isWriteSection = action.type === "write-section";
 
   const handleCopy = () => {
     void navigator.clipboard.writeText(output).then(() => {
@@ -230,6 +237,12 @@ function ModalCard({
                 <MarkdownContent text={output.replace(/^⚠\s*/, "")} />
               </div>
             </div>
+          ) : isWriteSection ? (
+            // Write-section: show the raw generated text as a "draft" preview
+            <div className="rounded-lg bg-slate-800/70 border border-slate-700 p-4">
+              <p className="text-[11px] text-slate-500 uppercase tracking-wide mb-2 font-medium">Generated text</p>
+              <p className="text-[13px] text-slate-200 leading-relaxed whitespace-pre-wrap">{output}</p>
+            </div>
           ) : tasks !== null && tasks.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center">
               <span className="text-3xl">📭</span>
@@ -251,24 +264,53 @@ function ModalCard({
         {/* ── Footer ───────────────────────────────────────────────── */}
         {!isError && (
           <div className="px-5 py-3 bg-slate-800/60 border-t border-slate-700/60 flex-shrink-0 space-y-2">
-            <button
-              onClick={handleCopy}
-              className="w-full py-2 text-[12px] font-medium rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-follac-500/50 text-slate-300 hover:text-white transition-all"
-            >
-              {copied ? "✓  Copied to clipboard" : "📋  Copy"}
-            </button>
-            {action.type === "rewrite-paragraph" && (
-              <p className="text-center text-[11px] text-slate-500">
-                💡 Rewritten text copied to clipboard — select your original text and press{" "}
-                <kbd className="bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-[10px] text-slate-300">
-                  ⌘V
-                </kbd>{" "}
-                /{" "}
-                <kbd className="bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-[10px] text-slate-300">
-                  Ctrl+V
-                </kbd>{" "}
-                to replace it
-              </p>
+            {isWriteSection ? (
+              // Write-section: primary Insert button + Retry
+              <>
+                <button
+                  onClick={() => { onInsert?.(output, action); onClose(); }}
+                  className="w-full py-2 text-[12px] font-semibold rounded-lg bg-follac-600 hover:bg-follac-500 text-white transition-colors"
+                >
+                  ✏️  Insert into document
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCopy}
+                    className="flex-1 py-1.5 text-[12px] font-medium rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 hover:text-white transition-all"
+                  >
+                    {copied ? "✓  Copied" : "📋  Copy"}
+                  </button>
+                  <button
+                    onClick={() => { onRetry?.(action); onClose(); }}
+                    className="flex-1 py-1.5 text-[12px] font-medium rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 hover:text-white transition-all"
+                  >
+                    🔁  Retry
+                  </button>
+                </div>
+              </>
+            ) : (
+              // Default: copy button
+              <>
+                <button
+                  onClick={handleCopy}
+                  className="w-full py-2 text-[12px] font-medium rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-follac-500/50 text-slate-300 hover:text-white transition-all"
+                >
+                  {copied ? "✓  Copied to clipboard" : "📋  Copy"}
+                </button>
+                {action.type === "rewrite-paragraph" && (
+                  <p className="text-center text-[11px] text-slate-500">
+                    💡 Rewritten text copied to clipboard — select your original text and press{" "}
+                    <kbd className="bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-[10px] text-slate-300">
+                      ⌘V
+                    </kbd>{" "}
+                    /{" "}
+                    <kbd className="bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-[10px] text-slate-300">
+                      Ctrl+V
+                    </kbd>{" "}
+                    to replace it
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
@@ -296,6 +338,22 @@ export function ResultModalContainer() {
     setPanels((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
+  const handleInsert = useCallback((output: string, action: ProposedAction) => {
+    // Route to the content script via a document event.
+    // index.ts listens and calls executionRunner.insertAtCursor().
+    document.dispatchEvent(
+      new CustomEvent("follac:insert-text", { detail: { output, actionId: action.id } }),
+    );
+  }, []);
+
+  const handleRetry = useCallback((action: ProposedAction) => {
+    // Ask the content script to re-run the action through the normal LLM pipeline.
+    // index.ts listens and calls handleActionApproved(action).
+    document.dispatchEvent(
+      new CustomEvent("follac:rerun-action", { detail: { action } }),
+    );
+  }, []);
+
   // Listen for result events pushed from FollacOverlay
   useEffect(() => {
     const handler = (e: Event) => {
@@ -313,5 +371,13 @@ export function ResultModalContainer() {
   const top = panels[panels.length - 1];
   if (!top) return null;
 
-  return <ModalCard key={top.id} entry={top} onClose={() => handleClose(top.id)} />;
+  return (
+    <ModalCard
+      key={top.id}
+      entry={top}
+      onClose={() => handleClose(top.id)}
+      onInsert={handleInsert}
+      onRetry={handleRetry}
+    />
+  );
 }

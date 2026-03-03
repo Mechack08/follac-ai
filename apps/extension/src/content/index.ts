@@ -212,7 +212,7 @@ async function handleActionApproved(action: ProposedAction): Promise<void> {
   sendToBackground({ topic: "action:approved", payload: action, timestamp: now() });
 
   // DOM-writing actions: result is applied directly to the page editor
-  const isDomWrite = (["draft-email", "generate-reply", "compose-linkedin-message", "rewrite-paragraph", "write-section"] as string[]).includes(action.type);
+  const isDomWrite = (["draft-email", "generate-reply", "compose-linkedin-message", "rewrite-paragraph"] as string[]).includes(action.type);
 
   try {
     // Route through background worker to bypass Gmail/Docs CSP
@@ -279,6 +279,20 @@ function sendToBackground(message: ExtensionMessage): void {
     // whichever catch block detects the next chrome.runtime call failure.
   }
 }
+
+// ─── Modal → content-script event bridge ─────────────────────────────────────
+
+// "Insert into document" button in the write-section modal
+document.addEventListener("follac:insert-text", (e: Event) => {
+  const { output } = (e as CustomEvent<{ output: string; actionId: string }>).detail;
+  void executionRunner.insertAtCursor(output);
+});
+
+// "Retry" button in the write-section modal — re-run the same action
+document.addEventListener("follac:rerun-action", (e: Event) => {
+  const { action } = (e as CustomEvent<{ action: ProposedAction }>).detail;
+  void handleActionApproved(action);
+});
 
 // Handle messages FROM background or popup
 // Wrap in try/catch: if the extension context is already invalidated when
