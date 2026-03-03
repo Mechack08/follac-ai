@@ -105,9 +105,11 @@ async function requestActions(context: ContextObject): Promise<void> {
       await overlayManager.injectIfNeeded();
       overlayManager.update(context, actions);
       overlayManager.show();
-    } else {
-      overlayManager.hide();
     }
+    // No overlayManager.hide() here — the sidebar persists once shown and
+    // only closes on explicit user dismissal or page navigation.
+    // Hiding on 0 actions would collapse the sidebar mid-execution if the
+    // doc poll happens to return empty on a particular cycle.
   } catch (err) {
     console.error("[Follac] Failed to request actions:", err);
   } finally {

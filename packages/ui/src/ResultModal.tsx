@@ -57,7 +57,7 @@ function tryParseTasks(output: string): Task[] | null {
     const match = output.match(/\[[\s\S]*\]/);
     if (!match) return null;
     const parsed = JSON.parse(match[0]) as unknown;
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed as Task[];
+    if (Array.isArray(parsed)) return parsed as Task[]; // includes empty []
     return null;
   } catch {
     return null;
@@ -228,6 +228,17 @@ function ModalCard({
               <span className="text-lg flex-shrink-0">⚠️</span>
               <p className="text-[13px] text-amber-300 leading-relaxed">
                 {output.replace(/^⚠\s*/, "")}
+              </p>
+            </div>
+          ) : tasks !== null && tasks.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-center">
+              <span className="text-3xl">📭</span>
+              <p className="text-[13px] text-slate-300 font-medium">No action items found</p>
+              <p className="text-[11px] text-slate-500 leading-relaxed max-w-[260px]">
+                No tasks, decisions, or follow-ups were detected in this document.
+                If the document has content, try enabling{" "}
+                <strong className="text-slate-400">Tools → Accessibility settings → Screen reader support</strong>{" "}
+                in Google Docs so Follac can read the text.
               </p>
             </div>
           ) : tasks ? (

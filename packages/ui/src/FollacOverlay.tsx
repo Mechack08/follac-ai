@@ -27,6 +27,8 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
   const [executingId, setExecutingId] = useState<string | null>(null);
+  /** Ref mirror of executingId — always current inside async event handlers. */
+  const executingIdRef = useRef<string | null>(null);
   const [successMap, setSuccessMap] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   /** Incremented only when action types change — prevents blinking on poll-only updates */
@@ -66,19 +68,26 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
         actions: ProposedAction[];
       }>).detail;
       setContext(ctx);
-      setActions(acts);
       setIsLoading(false);
       setIsSidebarVisible(true);
+      // Never replace action cards while an execution is in flight —
+      // the poll fires every 2s and would either clobber the spinner state
+      // or reassign cards while waiting for the LLM result.
+      if (!executingIdRef.current) {
+        setActions(acts);
+      }
       // Only re-animate cards and reset execution state when the set of action
       // *types* meaningfully changes (e.g. a new email opened), not on every
       // poll-driven re-detect where the same doc produces the same actions.
       const fingerprint = acts.map((a) => a.type).join(",");
       if (fingerprint !== actionFingerprintRef.current) {
         actionFingerprintRef.current = fingerprint;
-        setSuccessMap({});
-        setExecutingId(null);
-        generationRef.current += 1;
-        setGeneration(generationRef.current);
+        if (!executingIdRef.current) {
+          setSuccessMap({});
+          setExecutingId(null);
+          generationRef.current += 1;
+          setGeneration(generationRef.current);
+        }
       }
     };
     document.addEventListener("follac:update", handler);
@@ -93,7 +102,15 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
         output: string;
       }>).detail;
 
-      setExecutingId((prev) => (prev === actionId ? null : prev));
+      // Clear both state and ref synchronously so the very next
+      // follac:update (2s poll) is not blocked unnecessarily.
+      setExecutingId((prev) => {
+        if (prev === actionId) {
+          executingIdRef.current = null;
+          return null;
+        }
+        return prev;
+      });
 
       setActions((currentActions) => {
         const action = currentActions.find((a) => a.id === actionId);
@@ -128,6 +145,7 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
   }, []);
 
   const handleApprove = (action: ProposedAction) => {
+    executingIdRef.current = action.id; // set ref before state so event handlers see it immediately
     setExecutingId(action.id);
     callbacks.onActionApproved(action);
   };

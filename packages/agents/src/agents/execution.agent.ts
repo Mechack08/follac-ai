@@ -119,9 +119,12 @@ Format your response as:
 Return: { "result": "<markdown-formatted summary>" }`,
 
       "extract-tasks": `Extract all action items, tasks, and follow-ups.
-If context.platform is "google-docs": read from action.payload.bodyText. Look for TODOs, assignments, decisions, and language like "will", "should", "need to", "action:", deadlines, etc.
-Otherwise (email thread): focus on explicit requests, questions needing answers, and commitments made.
-Return a JSON array:
+For Google Docs (context.platform === "google-docs"): read text from action.payload.bodyText.
+  - IMPORTANT: If action.payload.bodyText is null or empty AND action.payload.headings is empty,
+    return { "result": "⚠ Document content not accessible. In Google Docs, go to **Tools → Accessibility settings** and enable **Screen reader support**, then retry Follac." }
+  - Otherwise look for TODOs, assignments, decisions, and language like "will", "should", "need to", "action:", deadlines, etc.
+For Gmail (context.platform === "gmail"): focus on explicit requests, questions, and commitments.
+Return a JSON array of tasks (may be empty [] if none found):
 [{ "task": "description", "owner": "person name or 'Me' or null", "dueDate": "date or null", "priority": "high|medium|low" }]
 Return: { "result": "[JSON array as string]" }`,
 
@@ -131,16 +134,18 @@ Keep the same intent and main message.
 Return: { "result": "<refined email as plain text>" }`,
 
       "summarize-document": `Provide a structured summary of the document.
-You will find the document content in action.payload.bodyText and section headings in action.payload.headings.
-If bodyText is null, base your summary on the documentTitle and available context.
-Format:
+The document body text is in action.payload.bodyText (may be null if Google Docs canvas is inaccessible)
+and section headings are in action.payload.headings (may be empty array).
+IMPORTANT: If bodyText is null or empty AND headings is an empty array, return exactly:
+{ "result": "⚠ Document content not accessible. In Google Docs, go to **Tools → Accessibility settings** and enable **Screen reader support**, then retry Follac." }
+Otherwise format the summary as:
 **Overview:** One-paragraph summary of the document's purpose and scope.
 
 **Key Sections:**
 • <heading or section title>: <what it covers>
-• (one bullet per major section, based on headings or identified structure)
+• (one bullet per major section)
 
-**Takeaways:** 2–3 concise conclusions or decisions from the document.
+**Takeaways:** 2–3 concise conclusions or decisions.
 Return: { "result": "<markdown summary>" }`,
 
       "compose-linkedin-message": `Write a natural, professional LinkedIn message.
