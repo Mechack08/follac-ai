@@ -152,21 +152,63 @@ export class ExecutionRunner {
    * Used for write-section (no prior selection needed).
    */
   async insertAtCursor(output: string): Promise<void> {
-    // Ensure the Docs editor has focus before inserting
-    const editor = document.querySelector<HTMLElement>(
-      '[role="textbox"][contenteditable="true"], .kix-canvas-tile-content',
-    );
-    editor?.focus();
+    // Clicking the modal button removes focus from the Docs editor.
+    // We must restore it before execCommand can insert at the cursor.
+
+    // Screen Reader mode: [role="textbox"][contenteditable="true"]
+    // Standard mode: the kix editor canvas div (not contenteditable, but still focusable)
+    const editor =
+      document.querySelector<HTMLElement>('[role="textbox"][contenteditable="true"]') ??
+      document.querySelector<HTMLElement>(".kix-appview-editor .docs-texteventtarget-iframe") ??
+      document.querySelector<HTMLElement>(".docs-texteventtarget-iframe");
+
+    // For iframe-based editors (standard Docs), focus the iframe's content window
+    if (editor?.tagName === "IFRAME") {
+      (editor as HTMLIFrameElement).contentWindow?.focus();
+    } else {
+      editor?.focus();
+    }
+
+    // Wait one animation frame so the browser flushes the focus event before execCommand
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
     const success = document.execCommand("insertText", false, output);
     if (success) return;
 
-    // Fallback: clipboard so user can Cmd+V
+    // Fallback: write to clipboard and notify the user via a brief banner
     try {
       await navigator.clipboard.writeText(output);
+      this.showInsertFallbackBanner();
     } catch (err) {
       console.warn("[Follac] Clipboard write failed:", err);
     }
+  }
+
+  private showInsertFallbackBanner(): void {
+    const existing = document.getElementById("follac-insert-banner");
+    if (existing) existing.remove();
+
+    const banner = document.createElement("div");
+    banner.id = "follac-insert-banner";
+    Object.assign(banner.style, {
+      position: "fixed",
+      bottom: "20px",
+      left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: "2147483647",
+      background: "#1e293b",
+      border: "1px solid #475569",
+      borderRadius: "8px",
+      padding: "10px 16px",
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "13px",
+      color: "#e2e8f0",
+      boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+      whiteSpace: "nowrap",
+    });
+    banner.textContent = "📋 Text copied — click in the document then press ⌘V / Ctrl+V to paste";
+    document.body.appendChild(banner);
+    setTimeout(() => banner.remove(), 4000);
   }
 
   private async replaceSelectedText(output: string): Promise<void> {
