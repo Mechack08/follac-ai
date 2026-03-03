@@ -36,6 +36,28 @@ export function FollacOverlay({ callbacks }: FollacOverlayProps) {
   const [generation, setGeneration] = useState(0);
   const actionFingerprintRef = useRef("");
 
+  // ── Mount-time bootstrap ─────────────────────────────────────────────────
+  // Bridge the race condition: OverlayManager calls update()/show() right after
+  // createRoot().render(), before React's useEffect listeners are attached.
+  // getInitialState() returns whatever update()/show() saved before we mounted.
+  useEffect(() => {
+    const init = callbacks.getInitialState?.();
+    if (!init) return;
+    if (init.context) setContext(init.context);
+    if (init.actions.length > 0) {
+      setActions(init.actions);
+      const fingerprint = init.actions.map((a) => a.type).join(",");
+      actionFingerprintRef.current = fingerprint;
+      generationRef.current += 1;
+      setGeneration(generationRef.current);
+    }
+    if (init.visible || init.actions.length > 0) {
+      setIsSidebarVisible(true);
+      setIsLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount only
+
   // ── Loading state (navigation started, waiting for new actions) ─────────
   useEffect(() => {
     const handler = () => {

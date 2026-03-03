@@ -21,6 +21,11 @@ export type OverlayCallbacks = {
   onActionApproved: (action: ProposedAction) => void;
   onActionRejected: (actionId: string) => void;
   onDismiss: () => void;
+  /**
+   * Called by the React component on first mount to consume any update/show
+   * calls that arrived before useEffect listeners were attached.
+   */
+  getInitialState?: () => { context: ContextObject | null; actions: ProposedAction[]; visible: boolean };
 };
 
 export class OverlayManager {
@@ -29,8 +34,23 @@ export class OverlayManager {
   private isInjected = false;
   private callbacks: OverlayCallbacks;
 
+  // ── Pending state ──────────────────────────────────────────────────────────
+  // Stored so the React component can initialise from them on first mount,
+  // bridging the race between createRoot().render() and the synchronous
+  // document.dispatchEvent() calls that follow injectIfNeeded().
+  private pendingContext: ContextObject | null = null;
+  private pendingActions: ProposedAction[] = [];
+  private pendingVisible = false;
+
   constructor(callbacks: OverlayCallbacks) {
-    this.callbacks = callbacks;
+    this.callbacks = {
+      ...callbacks,
+      getInitialState: () => ({
+        context: this.pendingContext,
+        actions: this.pendingActions,
+        visible: this.pendingVisible,
+      }),
+    };
   }
 
   /**
@@ -77,12 +97,16 @@ export class OverlayManager {
    * Update the overlay with new context and proposed actions.
    */
   update(context: ContextObject, actions: ProposedAction[]): void {
+    // Save so getInitialState() can supply them if React hasn't mounted yet.
+    this.pendingContext = context;
+    this.pendingActions = actions;
     if (!this.isInjected) return;
     // Dispatch on document so the React component inside Shadow DOM can receive it
     document.dispatchEvent(new CustomEvent("follac:update", { detail: { context, actions } }));
   }
 
   show(): void {
+    this.pendingVisible = true;
     // Let React own visibility — dispatch an event instead of CSS manipulation.
     // The host element is always in the DOM (pointerEvents:none acts as pass-through).
     document.dispatchEvent(new CustomEvent("follac:sidebar-show"));
