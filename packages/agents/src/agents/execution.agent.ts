@@ -118,19 +118,27 @@ Format your response as:
 **Sentiment:** [Positive / Neutral / Needs Attention]
 Return: { "result": "<markdown-formatted summary>" }`,
 
-      "extract-tasks": `Extract all action items, tasks, and follow-ups.
+      "extract-tasks": `Extract all action items, tasks, decisions, and follow-ups.
 
 For Google Docs (context.platform === "google-docs"):
-  - If action.payload.bodyText has content: scan it for TODOs, assignments, decisions, and
-    language like "will", "should", "need to", "action:", deadlines, owner names, etc.
-    Return a JSON array (may be empty [] if none found).
-  - If action.payload.bodyText is null/empty: return the plain string result:
-    "⚠ Document text not accessible — Follac could not read the page content.\n\nTo fix: in Google Docs open **Tools → Accessibility settings** and turn on **Screen reader support**, then click Run again."
-    (Return this as the result string, not a JSON array.)
+  CASE A — action.payload.bodyText has content:
+    Scan it for TODOs, assignments, decisions, and language like "will", "should",
+    "need to", "action:", deadlines, owner names. Return a JSON array (may be []).
+  CASE B — bodyText is null/empty (canvas mode; text not accessible):
+    Return this exact message as the result string (NOT a JSON array):
+    "⚠ Document text not accessible in canvas mode.
 
-For Gmail (context.platform === "gmail"): focus on explicit requests, questions, and commitments.
+To read this document's content, try either:
 
-When returning tasks, use this JSON array format:
+**Option 1 — Quick:** Press **⌘A** (Mac) or **Ctrl+A** (Windows) to select all text, then click **Run** again.
+
+**Option 2 — Permanent:** In Google Docs open **Tools → Accessibility settings** → turn on **Screen reader support** → then click Run again. This enables full document access for all future Follac features."
+
+For Gmail (context.platform === "gmail"):
+  Focus on explicit requests, questions needing answers, and commitments made in the thread.
+  Return a JSON array.
+
+JSON array format (when content is available):
 [{ "task": "description", "owner": "person name or 'Me' or null", "dueDate": "date or null", "priority": "high|medium|low" }]
 Return: { "result": "[JSON array as string]" }`,
 
@@ -140,26 +148,50 @@ Keep the same intent and main message.
 Return: { "result": "<refined email as plain text>" }`,
 
       "summarize-document": `Provide a structured summary of the document.
-Available data (use whatever is present):
-  - action.payload.documentTitle — document title
-  - action.payload.bodyText      — full body text (may be null if Docs canvas is inaccessible)
-  - action.payload.headings      — array of section headings (may be empty)
+Available data (check action.payload):
+  - documentTitle — the document title (string or null)
+  - bodyText      — full body text (string or null; null means Docs canvas mode is active)
+  - headings      — array of section headings (may be empty)
 
-Rules:
-1. If bodyText has content — write a full summary from it.
-2. If bodyText is null/empty but headings exist — summarise based on the headings alone, noting the sections present.
-3. If bodyText is null/empty AND headings is empty — write a one-paragraph summary based on the documentTitle, then add this note on a new line:
-   > 💡 Tip: For a richer summary, open **Tools → Accessibility settings → Screen reader support** in Google Docs and click Run again.
-4. If no title, body, or headings are available — return "⚠ No document content found. Please open a Google Doc and try again."
+CASE A — bodyText has content (length > 0):
+  Write a thorough, detailed summary. Include all major topics, arguments, data points, decisions.
+  Format:
+  **Overview:**
+  <2–3 sentence paragraph covering what the document is, its purpose, and audience>
 
-Always use this format when content is available:
-**Overview:** One-paragraph summary.
+  **Key Sections:**
+  • <Section heading or inferred section>: <detailed description of what it covers, key points, data>
+  • (one bullet per major section — be specific, not generic)
 
-**Key Sections:**
-• <section>: <what it covers>
+  **Takeaways:**
+  • <specific conclusion, decision, or insight>
+  • (2–4 bullets — draw concrete takeaways, not platitudes)
 
-**Takeaways:** 2–3 conclusions.
-Return: { "result": "<markdown summary>" }`,
+CASE B — bodyText is null/empty but headings has items:
+  Summarise each heading in depth. Explain what each section likely contains and why it matters.
+  Same format as CASE A but based on headings.
+
+CASE C — bodyText is null/empty AND headings is empty but documentTitle exists:
+  Write a useful analytical summary clearly labelled as title-based. DO NOT output empty sections.
+  Format:
+  **Based on title: "${action.payload.documentTitle}"**
+
+  **What this document likely covers:**
+  <Detailed 2–3 paragraph analysis of what a professional document with this exact title would typically address, the key concepts involved, likely audience, and scope>
+
+  **Probable key topics:**
+  • <topic 1 with explanation>
+  • <topic 2 with explanation>
+  • <topic 3 with explanation>
+  (3–5 specific, well-explained bullets derived from the title's subject matter)
+
+  **To get a full content-based summary:**
+  Press **⌘A** (Mac) / **Ctrl+A** (Windows) to select all document text, then click Run again. Or enable **Tools → Accessibility settings → Screen reader support** in Google Docs for automatic access.
+
+CASE D — nothing available (no title, no body, no headings):
+  Return: "⚠ No document content found. Please open a Google Doc and try again."
+
+Return: { "result": "<markdown output>" }`,
 
       "compose-linkedin-message": `Write a natural, professional LinkedIn message.
 Keep it brief (3-5 sentences), personalized, and not salesy.

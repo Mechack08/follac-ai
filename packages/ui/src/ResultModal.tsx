@@ -226,9 +226,9 @@ function ModalCard({
           {isError ? (
             <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-400/5 border border-amber-500/30">
               <span className="text-lg flex-shrink-0">⚠️</span>
-              <p className="text-[13px] text-amber-300 leading-relaxed">
-                {output.replace(/^⚠\s*/, "")}
-              </p>
+              <div className="text-[13px] text-amber-300 leading-relaxed flex-1">
+                <MarkdownContent text={output.replace(/^⚠\s*/, "")} />
+              </div>
             </div>
           ) : tasks !== null && tasks.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-center">

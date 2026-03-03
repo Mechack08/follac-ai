@@ -132,12 +132,13 @@ export class DocsAdapter extends BaseAdapter {
     // ── Document-level actions ────────────────────────────────────────────────
     if (docs.documentTitle || docs.bodyText) {
       const wordInfo = docs.wordCount ? ` (${docs.wordCount.toLocaleString()} words)` : "";
+      const noBodyHint = !docs.bodyText ? " — tip: press ⌘A to select all text first for best results" : "";
 
       actions.push({
         id: sid("summarize-document"),
         type: "summarize-document",
         title: "Summarize document",
-        description: `Create a structured summary of "${docs.documentTitle ?? "this document"}"${wordInfo}`,
+        description: `Create a structured summary of "${docs.documentTitle ?? "this document"}"${wordInfo}${noBodyHint}`,
         payload: {
           documentId: docs.documentId,
           documentTitle: docs.documentTitle,
@@ -154,7 +155,9 @@ export class DocsAdapter extends BaseAdapter {
         id: sid("extract-tasks"),
         type: "extract-tasks",
         title: "Extract action items",
-        description: "Find tasks, decisions, and follow-up items in this document",
+        description: docs.bodyText
+          ? "Find tasks, decisions, and follow-up items in this document"
+          : "Find action items — tip: press ⌘A to select all text first for best results",
         payload: {
           documentId: docs.documentId,
           documentTitle: docs.documentTitle,
@@ -194,49 +197,63 @@ export class DocsAdapter extends BaseAdapter {
   /**
    * Extract the full document body text from the Docs accessible DOM.
    *
-   * Google Docs maintains text in multiple layers:
-   *  - `.kix-paragraphrenderer` — primary paragraph container (most reliable)
-   *  - `[role="textbox"]`       — aria accessible layer
-   *  - `.kix-lineview-text-block` — alternate line-view layout
+   * Google Docs renders text to <canvas> tiles in standard mode, so the DOM
+   * strategies below work in increasing order of desperation:
    *
-   * Returns null if no accessible text is found (canvas-only mode).
+   *  1. `.kix-lineview-text-block span`        — span text nodes inside line views (most reliable without Screen Reader)
+   *  2. `.kix-paragraphrenderer span`           — span children of paragraph containers (sometimes populated)
+   *  3. `.kix-wordhtmlgenerator-word-node`      — word HTML generator nodes
+   *  4. `[role="textbox"]`                      — aria layer (Screen Reader mode)
+   *  5. Large window.getSelection()             — fallback if user pressed ⌘A to select all
+   *
+   * Returns null if no accessible text is found.
    */
   private extractBodyText(): string | null {
-    // Strategy 1: paragraph renderers (inline text spans inside each paragraph)
-    const paragraphRenderers = document.querySelectorAll(".kix-paragraphrenderer");
-    if (paragraphRenderers.length > 0) {
-      const paragraphs = Array.from(paragraphRenderers)
-        .map((el) => el.textContent?.trim() ?? "")
-        .filter((t) => t.length > 0);
-      if (paragraphs.length > 0) {
-        return paragraphs.join("\n").slice(0, 10000);
-      }
+    // Strategy 1: text-bearing spans inside line views — present in most Docs versions
+    const lineSpans = document.querySelectorAll(".kix-lineview-text-block span");
+    if (lineSpans.length > 0) {
+      const text = Array.from(lineSpans)
+        .map((el) => el.textContent ?? "")
+        .join("")
+        .replace(/\s{3,}/g, "\n")
+        .trim();
+      if (text.length > 50) return text.slice(0, 10000);
     }
 
-    // Strategy 2: aria textbox layer
+    // Strategy 2: span children of paragraph renderers
+    const paraSpans = document.querySelectorAll(".kix-paragraphrenderer span");
+    if (paraSpans.length > 0) {
+      const text = Array.from(paraSpans)
+        .map((el) => el.textContent ?? "")
+        .join("")
+        .replace(/\s{3,}/g, "\n")
+        .trim();
+      if (text.length > 50) return text.slice(0, 10000);
+    }
+
+    // Strategy 3: word-node spans
+    const wordNodes = document.querySelectorAll(".kix-wordhtmlgenerator-word-node");
+    if (wordNodes.length > 0) {
+      const text = Array.from(wordNodes)
+        .map((el) => el.textContent ?? "")
+        .join("")
+        .trim();
+      if (text.length > 50) return text.slice(0, 10000);
+    }
+
+    // Strategy 4: aria textbox layer (only present when Screen Reader Support is on)
     const textbox = document.querySelector<HTMLElement>('[role="textbox"]');
-    if (textbox?.textContent?.trim()) {
+    if (textbox?.textContent?.trim() && textbox.textContent.trim().length > 50) {
       return textbox.textContent.trim().slice(0, 10000);
     }
 
-    // Strategy 3: line-view text blocks
-    const lineBlocks = document.querySelectorAll(".kix-lineview-text-block");
-    if (lineBlocks.length > 0) {
-      const lines = Array.from(lineBlocks)
-        .map((el) => el.textContent?.trim() ?? "")
-        .filter((t) => t.length > 0);
-      if (lines.length > 0) {
-        return lines.join("\n").slice(0, 10000);
-      }
-    }
-
-    // Strategy 4: word-node spans (last resort)
-    const workerNodes = document.querySelectorAll(".kix-wordhtmlgenerator-word-node");
-    if (workerNodes.length > 0) {
-      return Array.from(workerNodes)
-        .map((el) => el.textContent ?? "")
-        .join("")
-        .slice(0, 10000);
+    // Strategy 5: use window.getSelection() if user selected a large portion (⌘A).
+    // Only activates for whole-document-scale selections (>2000 chars) to avoid
+    // misidentifying a short paragraph selection as the document body.
+    const selection = window.getSelection();
+    const selText = selection?.toString().trim() ?? "";
+    if (selText.length > 2000) {
+      return selText.slice(0, 10000);
     }
 
     return null;
