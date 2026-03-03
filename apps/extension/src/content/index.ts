@@ -281,7 +281,13 @@ function sendToBackground(message: ExtensionMessage): void {
 }
 
 // Handle messages FROM background or popup
-chrome.runtime.onMessage.addListener((message: ExtensionMessage) => {
-  if (message.topic === "overlay:show") overlayManager.show();
-  if (message.topic === "overlay:hide") overlayManager.hide();
-});
+// Wrap in try/catch: if the extension context is already invalidated when
+// the content script first loads, addListener throws synchronously.
+try {
+  chrome.runtime.onMessage.addListener((message: ExtensionMessage) => {
+    if (message.topic === "overlay:show") overlayManager.show();
+    if (message.topic === "overlay:hide") overlayManager.hide();
+  });
+} catch {
+  // Context invalidated on load — banner will appear when requestActions runs
+}
