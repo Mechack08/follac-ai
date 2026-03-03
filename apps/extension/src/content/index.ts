@@ -58,21 +58,25 @@ let lastContextKey = "";
 
 /**
  * Derive a short stable key from the context's meaningful fields.
- * Only changes when content the LLM actually needs changes.
+ * Includes the current URL so hash-based navigation (Gmail) and
+ * path-based navigation (Docs) both auto-invalidate the key without
+ * needing an explicit reset event.
  */
 function contextKey(context: ContextObject): string {
-  const d = context.extractedData as Record<string, unknown>;
+  const d = (context.extractedData ?? {}) as Record<string, unknown>;
+  const url = window.location.href;
   if (context.platform === "gmail") {
-    // Key on thread/compose content — ignore UI-only mutations
-    const draft = String(d.composeDraft ?? "");
-    return `gmail:${context.pageType}:${String(d.threadId ?? "")}:${String(d.isComposing)}:${draft.length}`;
+    // Compose draft length so improving a draft triggers a re-check;
+    // thread ID is encoded in the URL so no need to repeat it.
+    const draftLen = String(d.composeDraft ?? "").length;
+    return `gmail:${context.pageType}:${url}:${draftLen}`;
   }
   if (context.platform === "google-docs") {
-    // Key on document + selection — ignore cursor blink / scroll
-    const sel = String(d.selectedText ?? "");
-    return `docs:${context.pageType}:${String(d.documentId ?? "")}:${sel.slice(0, 80)}`;
+    // Selection text (first 80 chars) distinguishes document vs selection actions.
+    const sel = String(d.selectedText ?? "").slice(0, 80);
+    return `docs:${context.pageType}:${url}:${sel}`;
   }
-  return `${context.platform}:${context.pageType}`;
+  return `${context.platform}:${context.pageType}:${url}`;
 }
 
 // ─── Start Detection ──────────────────────────────────────────────────────────
@@ -92,6 +96,11 @@ window.addEventListener("popstate", () => {
   window.dispatchEvent(new Event("follac:navigate"));
 });
 
+// Gmail navigates via hash changes — these don't trigger pushState or popstate.
+window.addEventListener("hashchange", () => {
+  window.dispatchEvent(new Event("follac:navigate"));
+});
+
 window.addEventListener("follac:navigate", () => {
   // Signal loading state immediately so the overlay shows a spinner,
   // not stale action cards from the previous email.
@@ -107,16 +116,13 @@ async function requestActions(context: ContextObject): Promise<void> {
   // Never replace action cards while the user is waiting for an execution result.
   if (isProcessing || isExecuting) return;
 
-  // Skip if nothing meaningful changed since the last server call.
-  // NOTE: we only commit the key on SUCCESS below — not here — so that a
-  // failed request (server down, network error) doesn't permanently block
-  // retries for the same context.
-  const key = contextKey(context);
-  if (key === lastContextKey) return;
-
   isProcessing = true;
 
   try {
+    // Compute key inside try so any unexpected error doesn't silently kill the pipeline.
+    // We only commit the key on SUCCESS so errors stay retryable.
+    const key = contextKey(context);
+    if (key === lastContextKey) return;
     // Get deterministic actions from the adapter (fast, no LLM needed for action selection)
     const adapter = platformDetector.getCurrentAdapter();
     const adapterActions = adapter ? await adapter.proposeActions(context) : [];
