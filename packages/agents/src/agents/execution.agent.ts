@@ -108,7 +108,8 @@ export class ExecutionAgent extends BaseAgent<GeneratedContent> {
     // Strip extractedData from the context snapshot — the relevant content is
     // already present in trimmedAction.payload above (bodyText, headings, etc.).
     // Including it a second time would double the token cost with identical data.
-    const { extractedData: _unused, ...contextMeta } = context as Record<string, unknown>;
+    const contextMeta = { ...(context as Record<string, unknown>) };
+    delete contextMeta["extractedData"];
     const contextString = JSON.stringify(contextMeta, null, 2);
 
     const instructions: Record<string, string> = {
