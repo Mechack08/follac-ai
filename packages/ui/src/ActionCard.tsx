@@ -21,6 +21,8 @@ const ACTION_ICONS: Record<string, string> = {
   "rewrite-paragraph": "🔄",
   "write-section": "✏️",
   "research-person": "🔍",
+  "draft-job-application": "📝",
+  "research-company": "🏢",
   "custom": "⚡",
 };
 

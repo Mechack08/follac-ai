@@ -28,6 +28,8 @@ const ACTION_ICONS: Record<string, string> = {
   "compose-linkedin-message": "💬",
   "rewrite-paragraph": "🔄",
   "write-section": "✏️",
+  "draft-job-application": "📝",
+  "research-company": "🏢",
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -47,6 +49,8 @@ export const DISPLAY_ACTION_TYPES = new Set([
   "research-person",
   "rewrite-paragraph",
   "write-section",
+  "draft-job-application",
+  "research-company",
 ]);
 
 export const isDisplayAction = (type: string): boolean =>
