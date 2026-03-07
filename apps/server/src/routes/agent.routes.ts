@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { callLLM, callLLMStructured } from "../services/openai.service.js";
+import { ANALYSIS_TASKS, MAX_TOKENS_BY_TYPE, WRITING_TASKS } from "../lib/routing.js";
 import { config } from "../config.js";
 import type { AgentMessage } from "@follac/shared";
 
@@ -17,40 +18,6 @@ const AgentRequestBody = z.object({
   query: z.string().optional(),
   action: z.record(z.unknown()).optional(),
 });
-
-// ─── Per-action routing tables ────────────────────────────────────────────────
-//
-// Writing tasks produce creative / user-facing text → GPT-4o quality matters.
-// Analysis tasks extract or summarise facts → GPT-4o-mini is sufficient and
-// ~20× cheaper. Analysis results are also cached (same doc = same answer).
-
-const WRITING_TASKS = new Set([
-  "draft-email",
-  "generate-reply",
-  "rewrite-paragraph",
-  "write-section",
-  "compose-linkedin-message",
-]);
-
-const ANALYSIS_TASKS = new Set([
-  "summarize-document",
-  "summarize-thread",
-  "extract-tasks",
-  "research-person",
-]);
-
-/** Hard output-token budget per action type. Prevents over-allocation. */
-const MAX_TOKENS_BY_TYPE: Record<string, number> = {
-  "generate-reply": 600,
-  "draft-email": 800,
-  "compose-linkedin-message": 400,
-  "rewrite-paragraph": 800,
-  "write-section": 1200,
-  "summarize-thread": 800,
-  "summarize-document": 1200,
-  "extract-tasks": 1000,
-  "research-person": 600,
-};
 
 /**
  * Agent Routes — /api/agents/*

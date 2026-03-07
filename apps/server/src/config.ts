@@ -6,6 +6,12 @@ export const config = {
   port: parseInt(process.env["PORT"] ?? "3001", 10),
   nodeEnv: process.env["NODE_ENV"] ?? "development",
   logLevel: process.env["LOG_LEVEL"] ?? "info",
+  /**
+   * Shared secret that protects /api/* routes from unauthorized use.
+   * Set FOLLAC_API_SECRET in server .env and the extension build env.
+   * Leave empty in development — auth is skipped when not set.
+   */
+  apiSecret: process.env["FOLLAC_API_SECRET"] ?? "",
   openai: {
     apiKey: process.env["OPENAI_API_KEY"] ?? "",
     /**

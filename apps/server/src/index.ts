@@ -19,6 +19,7 @@ import rateLimit from "@fastify/rate-limit";
 import { agentRoutes } from "./routes/agent.routes.js";
 import { orchestrateRoutes } from "./routes/orchestrate.routes.js";
 import { healthRoutes } from "./routes/health.routes.js";
+import { authMiddleware } from "./middleware/auth.js";
 import { config } from "./config.js";
 
 const server = Fastify({
@@ -39,12 +40,15 @@ await server.register(helmet, {
 
 await server.register(cors, {
   origin: (origin, cb) => {
-    // Allow Chrome extensions and local dev
-    if (!origin || origin.startsWith("chrome-extension://") || origin.startsWith("http://localhost")) {
-      cb(null, true);
-    } else {
-      cb(new Error("CORS: Origin not allowed"), false);
+    // Chrome extensions are always allowed (production clients)
+    if (!origin || origin.startsWith("chrome-extension://")) {
+      return cb(null, true);
     }
+    // Localhost only in non-production environments
+    if (config.nodeEnv !== "production" && origin.startsWith("http://localhost")) {
+      return cb(null, true);
+    }
+    return cb(new Error("CORS: Origin not allowed"), false);
   },
   methods: ["GET", "POST"],
 });
@@ -53,11 +57,29 @@ await server.register(rateLimit, {
   global: true,
   max: 60,
   timeWindow: "1 minute",
+  // Per-IP limit: each client gets their own bucket.
+  // Honour X-Forwarded-For set by reverse proxies / load balancers in production.
+  keyGenerator: (request) => {
+    const forwarded = request.headers["x-forwarded-for"];
+    const ip =
+      (Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(",")[0]) ??
+      request.ip;
+    return ip.trim();
+  },
   errorResponseBuilder: () => ({
     statusCode: 429,
     error: "Too Many Requests",
     message: "Rate limit exceeded. Please wait before sending more requests.",
   }),
+});
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+// Protect all /api/* routes. Health check is intentionally unprotected.
+// Auth is a no-op when FOLLAC_API_SECRET is not set (development).
+
+server.addHook("preHandler", async (request, reply) => {
+  if (!request.url.startsWith("/api")) return;
+  await authMiddleware(request, reply);
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────

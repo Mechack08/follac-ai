@@ -32,6 +32,17 @@ interface CacheEntry {
 
 const responseCache = new Map<string, CacheEntry>();
 
+/**
+ * In-flight request deduplication — prevents cache stampedes.
+ *
+ * Scenario: 500 users simultaneously run "Summarize document" on the same
+ * viral Google Doc when the cache is cold. Without this, 500 identical
+ * OpenAI calls fire in parallel. With this, only ONE fires — the other 499
+ * await the same Promise and receive the result at zero extra token cost.
+ * The resolved value is then stored in responseCache for subsequent requests.
+ */
+const inFlight = new Map<string, Promise<LLMResponse>>();
+
 function getCacheKey(messages: AgentMessage[], model: string): string {
   return createHash("sha256")
     .update(JSON.stringify({ messages, model }))
@@ -79,15 +90,43 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
     useCache = false,
   } = options;
 
-  // Cache lookup
   if (useCache) {
     const key = getCacheKey(messages, model);
+
+    // Cache hit — free
     const cached = responseCache.get(key);
     if (cached && cached.expiresAt > Date.now()) {
       return { ...cached.response, fromCache: true };
     }
+
+    // Stampede prevention: if an identical request is already in-flight, await it
+    const existing = inFlight.get(key);
+    if (existing) return existing;
+
+    // First request for this key — create the shared promise
+    const shared = fetchFromOpenAI(model, messages, temperature, maxTokens, jsonMode)
+      .then((result) => {
+        evictExpired();
+        responseCache.set(key, { response: result, expiresAt: Date.now() + CACHE_TTL_MS });
+        return result;
+      })
+      .finally(() => inFlight.delete(key));
+
+    inFlight.set(key, shared);
+    return shared;
   }
 
+  // Non-cached path (writing tasks) — always a fresh call
+  return fetchFromOpenAI(model, messages, temperature, maxTokens, jsonMode);
+}
+
+async function fetchFromOpenAI(
+  model: string,
+  messages: AgentMessage[],
+  temperature: number,
+  maxTokens: number,
+  jsonMode: boolean,
+): Promise<LLMResponse> {
   const response = await client.chat.completions.create({
     model,
     messages,
@@ -101,7 +140,7 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
     throw new Error("OpenAI returned an empty response");
   }
 
-  const result: LLMResponse = {
+  return {
     content: choice.message.content,
     tokenUsage: {
       promptTokens: response.usage?.prompt_tokens ?? 0,
@@ -109,15 +148,6 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
       totalTokens: response.usage?.total_tokens ?? 0,
     },
   };
-
-  // Cache store
-  if (useCache) {
-    evictExpired();
-    const key = getCacheKey(messages, model);
-    responseCache.set(key, { response: result, expiresAt: Date.now() + CACHE_TTL_MS });
-  }
-
-  return result;
 }
 
 /**

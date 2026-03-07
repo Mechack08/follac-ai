@@ -1,5 +1,5 @@
 import { BaseAgent } from "../base.agent.js";
-import type { AgentRequest, AgentResponse, ExecutionResult, ProposedAction } from "@follac/shared";
+import type { AgentMessage, AgentRequest, AgentResponse, ContextObject, ExecutionResult, ProposedAction } from "@follac/shared";
 import { now } from "@follac/shared";
 
 export type GeneratedContent = string;
@@ -82,6 +82,21 @@ export class ExecutionAgent extends BaseAgent<GeneratedContent> {
       error,
       executedAt: now(),
     };
+  }
+
+  /**
+   * Build the message array for an execution LLM call.
+   *
+   * Exposed so the server's /api/execute route can call OpenAI directly
+   * without an HTTP round-trip back to /api/agents/execution.
+   * buildMessages() → callLLMStructured() replaces the old
+   * callServer("/api/agents/execution") path, saving one full HTTP hop.
+   */
+  public buildMessages(action: ProposedAction, context: ContextObject): AgentMessage[] {
+    return [
+      this.buildSystemMessage(context),
+      { role: "user" as const, content: this.buildPrompt(action, context) },
+    ];
   }
 
   private buildPrompt(action: ProposedAction, context: object): string {
