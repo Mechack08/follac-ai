@@ -69,8 +69,13 @@ export class PlatformDetector {
 
     if (this.currentAdapter?.name === adapter.name) {
       if (urlChanged) {
-        // Same platform, different URL (e.g. opened another email).
-        // Skip the long DOM debounce — detect after a short delay.
+        // Same platform, new URL (e.g. LinkedIn feed → job listing, Gmail thread switch).
+        // Tear down and re-attach the observer for the new page context — the old
+        // observer pointed at the previous page's DOM element with the previous subType.
+        this.currentAdapter.teardown();
+        if ("observe" in adapter && typeof (adapter as GmailAdapter).observe === "function") {
+          (adapter as GmailAdapter).observe(this.debouncedDetect);
+        }
         this.scheduleUrlChangeDetection();
       } else {
         // Same URL, DOM mutation — use normal debounce.
@@ -102,6 +107,11 @@ export class PlatformDetector {
     this.urlChangeTimer = setTimeout(() => {
       this.urlChangeTimer = null;
       void this.runDetection();
+      // Schedule a second detection pass for SPAs that render content slowly
+      // (LinkedIn takes 400-700ms to paint a job listing or profile).
+      // The contextKey includes data-presence flags so this pass only triggers
+      // a server call if new data (job title, profile name) is now in the DOM.
+      setTimeout(() => void this.runDetection(), EXTENSION_CONFIG.SPA_LATE_DETECT_MS);
     }, EXTENSION_CONFIG.URL_CHANGE_DEBOUNCE_MS);
   }
 

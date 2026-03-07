@@ -55,6 +55,8 @@ let isExecuting = false;
  * meaningful changed (e.g. same email thread, same Docs selection).
  */
 let lastContextKey = "";
+/** Tracks the URL at the time of the last navigate event to deduplicate replaceState no-ops. */
+let lastNavigatedUrl = window.location.href;
 
 /**
  * Derive a short stable key from the context's meaningful fields.
@@ -80,10 +82,15 @@ function contextKey(context: ContextObject): string {
     return `docs:${context.pageType}:${url}:${hasTitle}:${hasBody}:${sel}`;
   }
   if (context.platform === "linkedin") {
-    // Include draft length so that message-thread draft polling triggers
-    // a re-call when the user starts composing a message.
+    // Include draft length so message-thread polling triggers re-calls.
+    // Include data-presence flags so a 2nd pass (after DOM renders) always
+    // produces a different key than the initial empty-DOM pass — same fix
+    // as Google Docs' hasTitle/hasBody guards.
     const draftLen = String(d.messageDraft ?? "").length;
-    return `linkedin:${context.pageType}:${url}:${draftLen}`;
+    const hasJob = d.jobTitle ? "1" : "0";
+    const hasProfile = d.profileName ? "1" : "0";
+    const hasCompany = d.companyName ? "1" : "0";
+    return `linkedin:${context.pageType}:${url}:${draftLen}:${hasJob}:${hasProfile}:${hasCompany}`;
   }
   return `${context.platform}:${context.pageType}:${url}`;
 }
@@ -94,11 +101,22 @@ platformDetector.initialize(window.location.href);
 
 // ─── SPA Navigation Watcher ───────────────────────────────────────────────────
 
-// Patch history.pushState to emit a custom event for SPA route changes
+// Patch history.pushState and history.replaceState to emit a custom event
+// for SPA route changes. LinkedIn uses replaceState for some transitions.
 const originalPushState = history.pushState.bind(history);
 history.pushState = function (...args) {
   originalPushState(...args);
   window.dispatchEvent(new Event("follac:navigate"));
+};
+
+const originalReplaceState = history.replaceState.bind(history);
+history.replaceState = function (...args) {
+  originalReplaceState(...args);
+  // Only fire if the URL actually changed (LinkedIn calls replaceState with the same URL
+  // to update scroll position — we don't want that to trigger a full re-detection).
+  if (window.location.href !== lastNavigatedUrl) {
+    window.dispatchEvent(new Event("follac:navigate"));
+  }
 };
 
 window.addEventListener("popstate", () => {
@@ -111,8 +129,9 @@ window.addEventListener("hashchange", () => {
 });
 
 window.addEventListener("follac:navigate", () => {
+  lastNavigatedUrl = window.location.href;
   // Signal loading state immediately so the overlay shows a spinner,
-  // not stale action cards from the previous email.
+  // not stale action cards from the previous page.
   document.dispatchEvent(new CustomEvent("follac:loading"));
   // Reset fingerprint so the new page always triggers a server call.
   lastContextKey = "";

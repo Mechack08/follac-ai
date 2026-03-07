@@ -27,6 +27,14 @@ export const EXTENSION_CONFIG = {
   /** How long to wait before re-analyzing context (ms) */
   CONTEXT_REFRESH_INTERVAL_MS: 3000,
 
+  /**
+   * Second detection pass after SPA navigation.
+   * SPAs like LinkedIn can take 400-700ms to fully render page content;
+   * this pass catches data (job title, profile name) that wasn't in the DOM
+   * when the first 80ms detection ran.
+   */
+  SPA_LATE_DETECT_MS: 700,
+
   /** Maximum number of proposed actions shown at once */
   MAX_ACTIONS_SHOWN: 3,
 

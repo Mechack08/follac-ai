@@ -61,8 +61,10 @@ export class LinkedInAdapter extends BaseAdapter {
       this.querySelector("main") ??
       document.body;
     this.observer = new MutationObserver(onChangeCallback);
-    // childList only (no subtree) — profile / job pages don't deeply mutate once loaded
-    this.observer.observe(target, { childList: true, subtree: false });
+    // subtree: true so deeply-nested content (job descriptions, profile sections)
+    // loading after the SPA navigation triggers a re-detection.
+    // The 150ms debounce in debouncedDetect prevents over-firing.
+    this.observer.observe(target, { childList: true, subtree: true });
   }
 
   override teardown(): void {
