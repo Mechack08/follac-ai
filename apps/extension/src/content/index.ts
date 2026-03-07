@@ -79,6 +79,12 @@ function contextKey(context: ContextObject): string {
     const hasBody = d.bodyText ? "1" : "0";
     return `docs:${context.pageType}:${url}:${hasTitle}:${hasBody}:${sel}`;
   }
+  if (context.platform === "linkedin") {
+    // Include draft length so that message-thread draft polling triggers
+    // a re-call when the user starts composing a message.
+    const draftLen = String(d.messageDraft ?? "").length;
+    return `linkedin:${context.pageType}:${url}:${draftLen}`;
+  }
   return `${context.platform}:${context.pageType}:${url}`;
 }
 

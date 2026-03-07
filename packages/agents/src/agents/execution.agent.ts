@@ -259,6 +259,28 @@ Return: { "result": "<text to insert at cursor>" }`,
       "research-person": `Provide a concise professional summary based on available context.
 Include: current role, company, background, and potential talking points.
 Return: { "result": "<profile summary as markdown>" }`,
+
+      "draft-job-application": `Write a personalized LinkedIn application message for this job.
+Available data in action.payload: jobTitle, jobCompany, jobLocation, jobWorkplaceType, jobDescription.
+- Open with a specific hook related to the role or company — no generic "I am writing to apply"
+- Highlight 2-3 matching qualifications from jobDescription if available
+- Show genuine interest in this specific company and role
+- Conversational tone — this is a LinkedIn message, not a formal letter
+- 150-250 words max
+- End with a clear, low-pressure call to action
+- Do NOT start with "Dear Hiring Manager" — dive straight in
+Return: { "result": "<application message text>" }`,
+
+      "research-company": `Produce a structured company research card.
+Available data in action.payload: companyName, companyAbout (may be null), companyIndustry (may be null), jobTitle (may be null).
+Format exactly as follows:
+## [Company Name]
+**What they do:** 1-2 sentences on core product/service and market.
+**Industry & Scale:** industry, approximate size, key markets.
+**Culture signals:** what their messaging suggests about work environment, values, and priorities.
+**Why this matters for your application:** 2-3 specific talking points relevant to the role.
+**Red flags / things to verify:** questions worth investigating before applying.
+Return: { "result": "<markdown company card>" }`,
     };
 
     const typeInstruction = instructions[action.type] ??

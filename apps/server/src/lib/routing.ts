@@ -13,6 +13,7 @@ export const WRITING_TASKS = new Set([
   "rewrite-paragraph",
   "write-section",
   "compose-linkedin-message",
+  "draft-job-application",
 ]);
 
 export const ANALYSIS_TASKS = new Set([
@@ -20,6 +21,7 @@ export const ANALYSIS_TASKS = new Set([
   "summarize-thread",
   "extract-tasks",
   "research-person",
+  "research-company",
 ]);
 
 /** Hard output-token budget per action type. Prevents over-allocation. */
@@ -33,4 +35,6 @@ export const MAX_TOKENS_BY_TYPE: Record<string, number> = {
   "summarize-document": 1200,
   "extract-tasks": 1000,
   "research-person": 600,
+  "draft-job-application": 1000,
+  "research-company": 1000,
 };

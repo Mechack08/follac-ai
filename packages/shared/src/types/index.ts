@@ -65,6 +65,8 @@ export type ActionType =
   | "rewrite-paragraph"
   | "write-section"
   | "research-person"
+  | "draft-job-application"
+  | "research-company"
   | "custom";
 
 export type ActionStatus = "pending" | "approved" | "rejected" | "executing" | "completed" | "failed";
