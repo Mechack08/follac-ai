@@ -85,8 +85,16 @@ export class ExecutionAgent extends BaseAgent<GeneratedContent> {
   }
 
   private buildPrompt(action: ProposedAction, context: object): string {
-    const actionString = JSON.stringify(action, null, 2);
-    const contextString = JSON.stringify(context, null, 2);
+    // Trim long text fields in the payload — adapters can provide up to 10k chars
+    // of body text, but the LLM gets no value from the tail of a huge document.
+    const trimmedAction = this.trimActionPayload(action);
+    const actionString = JSON.stringify(trimmedAction, null, 2);
+
+    // Strip extractedData from the context snapshot — the relevant content is
+    // already present in trimmedAction.payload above (bodyText, headings, etc.).
+    // Including it a second time would double the token cost with identical data.
+    const { extractedData: _unused, ...contextMeta } = context as Record<string, unknown>;
+    const contextString = JSON.stringify(contextMeta, null, 2);
 
     const instructions: Record<string, string> = {
       "draft-email": `Write a complete, professional email.
@@ -252,5 +260,21 @@ ${contextString}
 Instructions:
 ${typeInstruction}
 `.trim();
+  }
+
+  /**
+   * Trim long string fields in action.payload to limit prompt token usage.
+   * bodyText beyond 6 000 chars and selectedText beyond 4 000 chars add cost
+   * without improving output quality — the LLM only needs the relevant portion.
+   */
+  private trimActionPayload(action: ProposedAction): ProposedAction {
+    const payload = { ...(action.payload as Record<string, unknown>) };
+    if (typeof payload["bodyText"] === "string" && payload["bodyText"].length > 6000) {
+      payload["bodyText"] = payload["bodyText"].slice(0, 6000) + "\n... [truncated for brevity]";
+    }
+    if (typeof payload["selectedText"] === "string" && payload["selectedText"].length > 4000) {
+      payload["selectedText"] = payload["selectedText"].slice(0, 4000) + "... [truncated]";
+    }
+    return { ...action, payload } as ProposedAction;
   }
 }

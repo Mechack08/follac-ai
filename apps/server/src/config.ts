@@ -8,9 +8,20 @@ export const config = {
   logLevel: process.env["LOG_LEVEL"] ?? "info",
   openai: {
     apiKey: process.env["OPENAI_API_KEY"] ?? "",
+    /**
+     * Heavy model — used only for generation tasks where quality matters:
+     * draft-email, generate-reply, rewrite-paragraph, write-section, compose-linkedin-message
+     */
     model: process.env["OPENAI_MODEL"] ?? "gpt-4o",
+    /**
+     * Lite model — used for analysis/read tasks where cost matters:
+     * summarize-document, summarize-thread, extract-tasks, research-person,
+     * context-analysis, action-selection
+     * ~20× cheaper than gpt-4o with equivalent quality for these tasks.
+     */
+    modelLite: process.env["OPENAI_MODEL_LITE"] ?? "gpt-4o-mini",
     temperature: 0.3,
-    maxTokens: 2048,
+    maxTokens: 1024, // sensible default — routes override per action type
   },
 } as const;
 

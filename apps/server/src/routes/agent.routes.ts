@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { callLLMStructured } from "../services/openai.service.js";
+import { callLLM, callLLMStructured } from "../services/openai.service.js";
+import { config } from "../config.js";
 import type { AgentMessage } from "@follac/shared";
 
 // ─── Validation Schemas ───────────────────────────────────────────────────────
@@ -17,6 +18,40 @@ const AgentRequestBody = z.object({
   action: z.record(z.unknown()).optional(),
 });
 
+// ─── Per-action routing tables ────────────────────────────────────────────────
+//
+// Writing tasks produce creative / user-facing text → GPT-4o quality matters.
+// Analysis tasks extract or summarise facts → GPT-4o-mini is sufficient and
+// ~20× cheaper. Analysis results are also cached (same doc = same answer).
+
+const WRITING_TASKS = new Set([
+  "draft-email",
+  "generate-reply",
+  "rewrite-paragraph",
+  "write-section",
+  "compose-linkedin-message",
+]);
+
+const ANALYSIS_TASKS = new Set([
+  "summarize-document",
+  "summarize-thread",
+  "extract-tasks",
+  "research-person",
+]);
+
+/** Hard output-token budget per action type. Prevents over-allocation. */
+const MAX_TOKENS_BY_TYPE: Record<string, number> = {
+  "generate-reply": 600,
+  "draft-email": 800,
+  "compose-linkedin-message": 400,
+  "rewrite-paragraph": 800,
+  "write-section": 1200,
+  "summarize-thread": 800,
+  "summarize-document": 1200,
+  "extract-tasks": 1000,
+  "research-person": 600,
+};
+
 /**
  * Agent Routes — /api/agents/*
  *
@@ -26,10 +61,10 @@ const AgentRequestBody = z.object({
  * This pattern keeps:
  * - LLM calls server-side (API key never exposed)
  * - Agent logic client-testable (agents only build prompts)
- * - Easy to add caching, logging, or model-switching per agent
+ * - Caching, logging, and model-switching centralised here
  */
 export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
-  // Context Agent
+  // Context Agent — lightweight classification, gpt-4o-mini is fine
   fastify.post("/context", async (request, reply) => {
     const body = AgentRequestBody.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: body.error.message });
@@ -37,6 +72,8 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     try {
       const { result, tokenUsage } = await callLLMStructured({
         messages: body.data.messages as AgentMessage[],
+        model: config.openai.modelLite,
+        maxTokens: 512,
       });
       return { result, tokenUsage };
     } catch (err) {
@@ -45,17 +82,16 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  // Action Agent
+  // Action Agent — proposes action list, gpt-4o-mini is fine
   fastify.post("/action", async (request, reply) => {
     const body = AgentRequestBody.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: body.error.message });
 
     try {
-      // Action agent returns an array — wrap it for callLLMStructured
-      const { content, tokenUsage } = await (
-        await import("../services/openai.service.js")
-      ).callLLM({
+      const { content, tokenUsage } = await callLLM({
         messages: body.data.messages as AgentMessage[],
+        model: config.openai.modelLite,
+        maxTokens: 512,
         jsonMode: true,
       });
 
@@ -72,7 +108,7 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  // Research Agent
+  // Research Agent — person enrichment, analysis quality — gpt-4o-mini + cache
   fastify.post("/research", async (request, reply) => {
     const body = AgentRequestBody.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: body.error.message });
@@ -80,6 +116,9 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     try {
       const { result, tokenUsage } = await callLLMStructured({
         messages: body.data.messages as AgentMessage[],
+        model: config.openai.modelLite,
+        maxTokens: MAX_TOKENS_BY_TYPE["research-person"] ?? 600,
+        useCache: true,
       });
       return { result, tokenUsage };
     } catch (err) {
@@ -88,17 +127,46 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  // Execution Agent
+  // Execution Agent — model + token budget chosen per action type
   fastify.post("/execution", async (request, reply) => {
     const body = AgentRequestBody.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: body.error.message });
 
+    const actionType =
+      (body.data.action?.["type"] as string | undefined) ??
+      // action is also embedded inside the first user message for some agents
+      (() => {
+        try {
+          const userMsg = body.data.messages.find((m) => m.role === "user");
+          if (!userMsg) return undefined;
+          const inner = JSON.parse(userMsg.content) as Record<string, unknown>;
+          return inner["type"] as string | undefined;
+        } catch {
+          return undefined;
+        }
+      })();
+
+    const isAnalysis = actionType ? ANALYSIS_TASKS.has(actionType) : false;
+    const isWriting = actionType ? WRITING_TASKS.has(actionType) : true;
+
+    const model = isWriting ? config.openai.model : config.openai.modelLite;
+    const maxTokens = actionType
+      ? (MAX_TOKENS_BY_TYPE[actionType] ?? config.openai.maxTokens)
+      : config.openai.maxTokens;
+
+    fastify.log.info(
+      { actionType, model, maxTokens, useCache: isAnalysis },
+      "Execution agent call",
+    );
+
     try {
       const { result, tokenUsage } = await callLLMStructured<string>({
         messages: body.data.messages as AgentMessage[],
-        maxTokens: 4096,
-        temperature: 0.5,
+        model,
+        maxTokens,
+        temperature: isWriting ? 0.5 : 0.2,
         jsonMode: true,
+        useCache: isAnalysis,
       });
       return { result, tokenUsage };
     } catch (err) {
@@ -106,10 +174,15 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
       const message = err instanceof Error ? err.message : String(err);
       // Surface quota/auth errors clearly instead of a generic message
       if (message.includes("insufficient_quota") || message.includes("429")) {
-        return reply.status(402).send({ error: "OpenAI quota exceeded — please add credits at platform.openai.com/settings/billing" });
+        return reply.status(402).send({
+          error:
+            "OpenAI quota exceeded — please add credits at platform.openai.com/settings/billing",
+        });
       }
       if (message.includes("401") || message.includes("invalid_api_key")) {
-        return reply.status(401).send({ error: "Invalid OpenAI API key — check OPENAI_API_KEY in apps/server/.env" });
+        return reply.status(401).send({
+          error: "Invalid OpenAI API key — check OPENAI_API_KEY in apps/server/.env",
+        });
       }
       return reply.status(500).send({ error: `Execution agent failed: ${message}` });
     }

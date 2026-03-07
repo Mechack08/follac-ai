@@ -7,13 +7,46 @@
  *
  * Contract: always returns structured JSON.
  * If the model returns invalid JSON, we throw — the route handler catches it.
+ *
+ * Response Cache:
+ * Analysis actions (summarize, extract-tasks) are cached for CACHE_TTL_MS.
+ * Re-running "Summarize document" on the same unchanged file returns instantly
+ * at zero token cost. Writing actions are never cached — users expect variation.
  */
 
+import { createHash } from "crypto";
 import OpenAI from "openai";
 import { config } from "../config.js";
 import type { AgentMessage } from "@follac/shared";
 
 const client = new OpenAI({ apiKey: config.openai.apiKey });
+
+// ── Response cache ────────────────────────────────────────────────────────────
+
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+interface CacheEntry {
+  response: LLMResponse;
+  expiresAt: number;
+}
+
+const responseCache = new Map<string, CacheEntry>();
+
+function getCacheKey(messages: AgentMessage[], model: string): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ messages, model }))
+    .digest("hex");
+}
+
+/** Evict expired entries lazily on every cache write (keeps memory bounded). */
+function evictExpired(): void {
+  const now = Date.now();
+  for (const [key, entry] of responseCache) {
+    if (entry.expiresAt < now) responseCache.delete(key);
+  }
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface LLMCallOptions {
   messages: AgentMessage[];
@@ -21,6 +54,8 @@ export interface LLMCallOptions {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  /** When true, cache the response by message hash. Use only for deterministic analysis tasks. */
+  useCache?: boolean;
 }
 
 export interface LLMResponse {
@@ -30,6 +65,8 @@ export interface LLMResponse {
     completionTokens: number;
     totalTokens: number;
   };
+  /** True when the response was served from cache (zero token cost). */
+  fromCache?: boolean;
 }
 
 export async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
@@ -39,7 +76,17 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
     temperature = config.openai.temperature,
     maxTokens = config.openai.maxTokens,
     jsonMode = true,
+    useCache = false,
   } = options;
+
+  // Cache lookup
+  if (useCache) {
+    const key = getCacheKey(messages, model);
+    const cached = responseCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { ...cached.response, fromCache: true };
+    }
+  }
 
   const response = await client.chat.completions.create({
     model,
@@ -54,7 +101,7 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
     throw new Error("OpenAI returned an empty response");
   }
 
-  return {
+  const result: LLMResponse = {
     content: choice.message.content,
     tokenUsage: {
       promptTokens: response.usage?.prompt_tokens ?? 0,
@@ -62,6 +109,15 @@ export async function callLLM(options: LLMCallOptions): Promise<LLMResponse> {
       totalTokens: response.usage?.total_tokens ?? 0,
     },
   };
+
+  // Cache store
+  if (useCache) {
+    evictExpired();
+    const key = getCacheKey(messages, model);
+    responseCache.set(key, { response: result, expiresAt: Date.now() + CACHE_TTL_MS });
+  }
+
+  return result;
 }
 
 /**
