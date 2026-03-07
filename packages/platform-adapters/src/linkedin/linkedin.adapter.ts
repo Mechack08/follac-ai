@@ -104,54 +104,101 @@ export class LinkedInAdapter extends BaseAdapter {
         headline: li.profileHeadline,
         currentCompany: li.profileCompany,
         aboutSection: li.aboutSection,
-        skills: li.skills,
+        // Use the broader cache-specific extractor rather than the subType-filtered one
+        skills: this.extractSkillsForCache(),
         allExperience: this.extractAllExperienceEntries(),
         education: this.extractEducationEntries(),
         cachedAt: Date.now(),
       };
       localStorage.setItem(LinkedInAdapter.CACHE_KEY, JSON.stringify(profile));
+      console.debug(
+        "[Follac] Own profile cached:", profile.name,
+        "| skills:", profile.skills.length,
+        "| exp:", profile.allExperience.length,
+      );
     } catch {
       // localStorage unavailable — silently skip
     }
   }
 
+  /**
+   * Broader skills extraction for the own-profile cache.
+   * Uses multiple selector strategies so we survive LinkedIn DOM changes.
+   */
+  private extractSkillsForCache(): string[] {
+    const results = new Set<string>();
+
+    // Strategy 1: the dedicated #skills section (most reliable anchor)
+    const skillsSection =
+      this.querySelector("#skills")?.closest("section") ??
+      this.querySelector("[id*='skills']")?.closest("section");
+
+    if (skillsSection) {
+      skillsSection.querySelectorAll<HTMLElement>("span[aria-hidden='true']").forEach((el) => {
+        const text = el.textContent?.trim() ?? "";
+        // Skill labels: short (2-60 chars), not UI chrome like "See more"
+        if (text.length > 2 && text.length < 60 && !/^(see|show|add|more|less|\d+)/i.test(text)) {
+          results.add(text);
+        }
+      });
+    }
+
+    // Strategy 2: legacy class names as fallback
+    document.querySelectorAll<HTMLElement>(
+      ".pv-skill-category-entity__name-text, " +
+      "[id*='skills'] .pvs-list span[aria-hidden='true']",
+    ).forEach((el) => {
+      const text = el.textContent?.trim() ?? "";
+      if (text.length > 2 && text.length < 60 && !/^(see|show|add|more|less|\d+)/i.test(text)) {
+        results.add(text);
+      }
+    });
+
+    return [...results].slice(0, 15);
+  }
+
   /** Extract all experience list items (up to 6) as compact text strings. */
   private extractAllExperienceEntries(): string[] {
-    const section = this.querySelector("#experience")?.closest("section");
+    const section =
+      this.querySelector("#experience")?.closest("section") ??
+      document.querySelector("section[data-section='experience']");
     if (!section) return [];
-    // Top-level list items only — not nested bullet descriptions
-    const items = section.querySelectorAll<HTMLElement>(
-      ":scope .pvs-list > li.pvs-list__item--line-separated, " +
-      ":scope .pvs-list > li.artdeco-list__item",
-    );
+
+    // Broad <li> query — LinkedIn's class names change but semantic structure is stable.
+    // Deduplicate partial/nested strings that are subsets of a longer sibling.
+    const items = section.querySelectorAll<HTMLElement>("li");
     return Array.from(items)
-      .slice(0, 6)
-      .map((el) =>
-        el.textContent
-          ?.replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 220) ?? "",
-      )
-      .filter(Boolean);
+      .map((el) => el.textContent?.replace(/\s+/g, " ").trim() ?? "")
+      .filter((text) => text.length > 10)
+      .reduce<string[]>((acc, text) => {
+        const trimmed = text.slice(0, 220);
+        if (!acc.some((existing) => existing.startsWith(trimmed.slice(0, 40)))) {
+          acc.push(trimmed);
+        }
+        return acc;
+      }, [])
+      .slice(0, 6);
   }
 
   /** Extract education list items (up to 4) as compact text strings. */
   private extractEducationEntries(): string[] {
-    const section = this.querySelector("#education")?.closest("section");
+    const section =
+      this.querySelector("#education")?.closest("section") ??
+      document.querySelector("section[data-section='education']");
     if (!section) return [];
-    const items = section.querySelectorAll<HTMLElement>(
-      ":scope .pvs-list > li.pvs-list__item--line-separated, " +
-      ":scope .pvs-list > li.artdeco-list__item",
-    );
+
+    const items = section.querySelectorAll<HTMLElement>("li");
     return Array.from(items)
-      .slice(0, 4)
-      .map((el) =>
-        el.textContent
-          ?.replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 220) ?? "",
-      )
-      .filter(Boolean);
+      .map((el) => el.textContent?.replace(/\s+/g, " ").trim() ?? "")
+      .filter((text) => text.length > 10)
+      .reduce<string[]>((acc, text) => {
+        const trimmed = text.slice(0, 220);
+        if (!acc.some((existing) => existing.startsWith(trimmed.slice(0, 40)))) {
+          acc.push(trimmed);
+        }
+        return acc;
+      }, [])
+      .slice(0, 4);
   }
 
   async extractData(): Promise<Record<string, unknown>> {
@@ -393,10 +440,7 @@ export class LinkedInAdapter extends BaseAdapter {
   private classifySubType(): LinkedInContext["pageSubType"] {
     const path = window.location.pathname;
     if (path.startsWith("/in/")) {
-      const isOwnProfile = !!document.querySelector(
-        '.profile-self-data, [data-view-name="profile-self-top-card"]',
-      );
-      return isOwnProfile ? "own-profile" : "other-profile";
+      return this.detectIsOwnProfile() ? "own-profile" : "other-profile";
     }
     if (path.startsWith("/jobs/view/") || path.startsWith("/jobs/collections/")) return "job-listing";
     if (path.startsWith("/company/")) return "company-page";
@@ -404,6 +448,47 @@ export class LinkedInAdapter extends BaseAdapter {
     if (path.startsWith("/messaging/")) return "message-thread";
     if (path.startsWith("/search/results/")) return "search-results";
     return "unknown";
+  }
+
+  /**
+   * Multi-signal own-profile detection.
+   * LinkedIn changes CSS class names frequently — we rely on several
+   * independent signals so at least one survives any given redesign.
+   */
+  private detectIsOwnProfile(): boolean {
+    // Signal 1: LinkedIn's first-party data attributes
+    if (document.querySelector('[data-view-name="profile-self-top-card"]')) return true;
+    if (document.querySelector('.profile-self-data')) return true;
+
+    // Signal 2: Edit / add controls that only appear on own profile
+    const editSignals = [
+      'button[aria-label*="Edit intro"]',
+      'button[aria-label*="Add profile section"]',
+      'button[aria-label*="Add section"]',
+      'a[data-control-name="edit_intro"]',
+      '.pvs-profile-actions--edit',
+      '.profile-edit-data',
+    ];
+    for (const sel of editSignals) {
+      if (document.querySelector(sel)) return true;
+    }
+
+    // Signal 3: "Open to" toggle — only visible on own profile
+    if (document.querySelector('button[aria-label*="Open to"], button[id*="openToWork"]')) return true;
+
+    // Signal 4: Compare URL slug against the nav "Me" anchor href
+    const currentSlug = window.location.pathname.match(/^\/in\/([^/?]+)/)?.[1];
+    if (currentSlug) {
+      const navAnchors = document.querySelectorAll<HTMLAnchorElement>(
+        'nav a[href*="/in/"], .global-nav a[href*="/in/"]',
+      );
+      for (const a of navAnchors) {
+        const slug = a.href.match(/\/in\/([^/?]+)/)?.[1];
+        if (slug && slug === currentSlug) return true;
+      }
+    }
+
+    return false;
   }
 
   private mapToPageType(subType: LinkedInContext["pageSubType"]) {
