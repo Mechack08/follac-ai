@@ -77,6 +77,83 @@ export class LinkedInAdapter extends BaseAdapter {
     this.lastDraft = "";
   }
 
+  // ── Own-profile cache ──────────────────────────────────────────────────────
+  // When the user visits their own profile we serialize their data to
+  // localStorage so it's available as applicant context on job listing pages.
+
+  private static readonly CACHE_KEY = "follac_own_profile_v1";
+  private static readonly CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+  private loadCachedProfile(): Record<string, unknown> | null {
+    try {
+      const raw = localStorage.getItem(LinkedInAdapter.CACHE_KEY);
+      if (!raw) return null;
+      const profile = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof profile.cachedAt !== "number") return null;
+      if (Date.now() - profile.cachedAt > LinkedInAdapter.CACHE_TTL_MS) return null;
+      return profile;
+    } catch {
+      return null;
+    }
+  }
+
+  private saveOwnProfileCache(li: LinkedInContext): void {
+    try {
+      const profile = {
+        name: li.profileName,
+        headline: li.profileHeadline,
+        currentCompany: li.profileCompany,
+        aboutSection: li.aboutSection,
+        skills: li.skills,
+        allExperience: this.extractAllExperienceEntries(),
+        education: this.extractEducationEntries(),
+        cachedAt: Date.now(),
+      };
+      localStorage.setItem(LinkedInAdapter.CACHE_KEY, JSON.stringify(profile));
+    } catch {
+      // localStorage unavailable — silently skip
+    }
+  }
+
+  /** Extract all experience list items (up to 6) as compact text strings. */
+  private extractAllExperienceEntries(): string[] {
+    const section = this.querySelector("#experience")?.closest("section");
+    if (!section) return [];
+    // Top-level list items only — not nested bullet descriptions
+    const items = section.querySelectorAll<HTMLElement>(
+      ":scope .pvs-list > li.pvs-list__item--line-separated, " +
+      ":scope .pvs-list > li.artdeco-list__item",
+    );
+    return Array.from(items)
+      .slice(0, 6)
+      .map((el) =>
+        el.textContent
+          ?.replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 220) ?? "",
+      )
+      .filter(Boolean);
+  }
+
+  /** Extract education list items (up to 4) as compact text strings. */
+  private extractEducationEntries(): string[] {
+    const section = this.querySelector("#education")?.closest("section");
+    if (!section) return [];
+    const items = section.querySelectorAll<HTMLElement>(
+      ":scope .pvs-list > li.pvs-list__item--line-separated, " +
+      ":scope .pvs-list > li.artdeco-list__item",
+    );
+    return Array.from(items)
+      .slice(0, 4)
+      .map((el) =>
+        el.textContent
+          ?.replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 220) ?? "",
+      )
+      .filter(Boolean);
+  }
+
   async extractData(): Promise<Record<string, unknown>> {
     const pageSubType = this.classifySubType();
 
@@ -109,6 +186,11 @@ export class LinkedInAdapter extends BaseAdapter {
       messageThreadName: this.extractMessageThreadName(pageSubType),
       messageThreadContent: this.extractMessageThreadContent(pageSubType),
     };
+
+    // Persist own profile so job pages can reference it as applicant context
+    if (pageSubType === "own-profile") {
+      this.saveOwnProfileCache(linkedin);
+    }
 
     return linkedin as unknown as Record<string, unknown>;
   }
@@ -195,17 +277,31 @@ export class LinkedInAdapter extends BaseAdapter {
 
     // ── Job listing ──────────────────────────────────────────────────────────
     if (li.pageSubType === "job-listing" && li.jobTitle) {
+      // Load the user's own profile from cache so the LLM can write a
+      // tailored application that references their actual experience.
+      const applicant = this.loadCachedProfile();
+
       actions.push({
         id: sid("draft-application"),
         type: "draft-job-application",
         title: "Draft application message",
         description: `Write a tailored cover message for "${li.jobTitle}"${li.jobCompany ? ` at ${li.jobCompany}` : ""}`,
         payload: {
+          // ── Job details ──
           jobTitle: li.jobTitle,
           jobCompany: li.jobCompany,
           jobLocation: li.jobLocation,
           jobWorkplaceType: li.jobWorkplaceType,
           jobDescription: li.jobDescription,
+          // ── Applicant profile (from own-profile cache — may be null if not visited yet) ──
+          applicantName: applicant?.name ?? null,
+          applicantHeadline: applicant?.headline ?? null,
+          applicantAbout: applicant?.aboutSection ?? null,
+          applicantSkills: Array.isArray(applicant?.skills)
+            ? (applicant.skills as string[]).join(", ")
+            : null,
+          applicantExperience: applicant?.allExperience ?? [],
+          applicantEducation: applicant?.education ?? [],
         },
         status: "pending",
         confidence: 0.93,

@@ -260,16 +260,42 @@ Return: { "result": "<text to insert at cursor>" }`,
 Include: current role, company, background, and potential talking points.
 Return: { "result": "<profile summary as markdown>" }`,
 
-      "draft-job-application": `Write a personalized LinkedIn application message for this job.
-Available data in action.payload: jobTitle, jobCompany, jobLocation, jobWorkplaceType, jobDescription.
-- Open with a specific hook related to the role or company — no generic "I am writing to apply"
-- Highlight 2-3 matching qualifications from jobDescription if available
-- Show genuine interest in this specific company and role
-- Conversational tone — this is a LinkedIn message, not a formal letter
-- 150-250 words max
-- End with a clear, low-pressure call to action
-- Do NOT start with "Dear Hiring Manager" — dive straight in
-Return: { "result": "<application message text>" }`,
+      "draft-job-application": `Write a complete, professional LinkedIn job application message tailored to this exact role and applicant.
+
+Available data in action.payload:
+  Job: jobTitle, jobCompany, jobLocation, jobWorkplaceType, jobDescription
+  Applicant (from their LinkedIn profile — may be null if profile not yet cached):
+    applicantName, applicantHeadline, applicantAbout,
+    applicantSkills (comma-separated), applicantExperience (array of entries), applicantEducation (array)
+
+Structure — 4 paragraphs, 300–420 words total:
+
+**Paragraph 1 — Hook + Role Fit (2-3 sentences)**
+- Open with a specific, concrete observation drawn from jobDescription or jobCompany — not generic praise
+- Explain in one sentence why THIS role at THIS company resonates, using a specific detail from the JD
+- Do NOT start with "I", "My", "Having", or any form of "I am excited/pleased to apply"
+
+**Paragraph 2 — Most Relevant Experience (3-4 sentences)**
+- From applicantExperience, pick the 1-2 entries that most directly match the JD requirements
+- Be concrete: reference actual job titles, companies, responsibilities, or technologies from those entries
+- If applicantExperience is empty, derive experience context from applicantHeadline and applicantAbout
+- Explicit bridge: state how that experience directly addresses a named requirement from the JD
+
+**Paragraph 3 — Skills + Unique Value (2-3 sentences)**
+- Select 3-4 skills from applicantSkills that match or are implied by the JD — name them explicitly
+- Add one specific differentiator from applicantAbout or applicantExperience that most candidates won't have
+- If applicantEducation is relevant to the role, briefly mention the degree/field
+
+**Paragraph 4 — CTA (1-2 sentences)**
+- Confident, not desperate — from a position of mutual value
+- Specific ask: propose a brief call or conversation to explore fit
+
+Hard rules:
+- NEVER use: "I am excited", "team player", "passionate about", "results-driven", "I am writing to apply", "Dear Hiring Manager"
+- If applicant data is null/empty, focus entirely on matching jobDescription requirements — do not invent background
+- Every paragraph must contain at least one specific detail (name, technology, company, metric) — no vague claims
+- Return ONLY the message text, no subject line, no meta-commentary
+Return: { "result": "<full application message>" }`,
 
       "research-company": `Produce a structured company research card.
 Available data in action.payload: companyName, companyAbout (may be null), companyIndustry (may be null), jobTitle (may be null).
