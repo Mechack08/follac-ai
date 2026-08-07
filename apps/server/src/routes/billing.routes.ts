@@ -72,7 +72,7 @@ export async function billingRoutes(fastify: FastifyInstance): Promise<void> {
     authed.post("/portal", async (request, reply) => {
       const user = request.sessionUser!;
       if (!user.stripeCustomerId) {
-        return reply.status(409).send({ error: "No billing account yet — subscribe to a plan first" });
+        return reply.status(409).send({ error: "No billing account yet. Subscribe to a plan first" });
       }
       const url = await createPortalSession(user.stripeCustomerId);
       return { url };

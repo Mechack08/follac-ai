@@ -15,7 +15,7 @@ export function getDb(): Database {
   if (_db) return _db;
   const connectionString = process.env["DATABASE_URL"];
   if (!connectionString) {
-    throw new Error("DATABASE_URL is not set — cannot connect to PostgreSQL");
+    throw new Error("DATABASE_URL is not set. Cannot connect to PostgreSQL");
   }
   _pool = new pg.Pool({ connectionString, max: 10 });
   _db = drizzle(_pool, { schema });

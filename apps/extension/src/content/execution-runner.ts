@@ -206,7 +206,7 @@ export class ExecutionRunner {
       boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
       whiteSpace: "nowrap",
     });
-    banner.textContent = "📋 Text copied — click in the document then press ⌘V / Ctrl+V to paste";
+    banner.textContent = "📋 Text copied. Click in the document then press ⌘V / Ctrl+V to paste";
     document.body.appendChild(banner);
     setTimeout(() => banner.remove(), 4000);
   }

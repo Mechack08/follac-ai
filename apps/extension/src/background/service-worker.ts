@@ -178,7 +178,7 @@ function updateBadge(tabId: number, text: string): void {
 async function proxyFetch(url: string, body: unknown): Promise<unknown> {
   const response = await authedFetch(url, body);
   if (response.status === 401) {
-    throw new Error("Sign in to Follac from the extension popup to use AI actions.");
+    throw new Error("Sign in to Follac from the extension popup to use assist actions.");
   }
   if (!response.ok) {
     // Extract the error.message field from JSON, or fall back to status text

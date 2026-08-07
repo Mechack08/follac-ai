@@ -27,5 +27,24 @@ module.exports = {
     "react/prop-types": "off",
     "no-console": ["warn", { allow: ["warn", "error"] }],
   },
-  ignorePatterns: ["dist/", "build/", "node_modules/", "*.config.*"],
+  ignorePatterns: [
+    "dist/",
+    "build/",
+    ".next/",
+    "node_modules/",
+    "*.config.*",
+    "**/*.css",
+    "**/*.md",
+  ],
+  overrides: [
+    {
+      // Root eslint runs without a local react install (web app has it).
+      files: ["apps/server/**/*", "apps/worker/**/*", "packages/**/*"],
+      settings: { react: { version: "19.0" } },
+      rules: {
+        "react/react-in-jsx-scope": "off",
+        "react/prop-types": "off",
+      },
+    },
+  ],
 };

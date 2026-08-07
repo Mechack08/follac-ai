@@ -143,12 +143,12 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
       if (message.includes("insufficient_quota") || message.includes("429")) {
         return reply.status(402).send({
           error:
-            "OpenAI quota exceeded — please add credits at platform.openai.com/settings/billing",
+            "OpenAI quota exceeded. please add credits at platform.openai.com/settings/billing",
         });
       }
       if (message.includes("401") || message.includes("invalid_api_key")) {
         return reply.status(401).send({
-          error: "Invalid OpenAI API key — check OPENAI_API_KEY in apps/server/.env",
+          error: "Invalid OpenAI API key. check OPENAI_API_KEY in apps/server/.env",
         });
       }
       return reply.status(500).send({ error: `Execution agent failed: ${message}` });
