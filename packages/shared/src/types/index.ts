@@ -135,7 +135,10 @@ export type MessageTopic =
   | "memory:save"
   | "memory:query"
   | "fetch:orchestrate"
-  | "fetch:execute";
+  | "fetch:execute"
+  | "auth:sign-in"
+  | "auth:sign-out"
+  | "auth:get-session";
 
 export interface ExtensionMessage<T = unknown> {
   topic: MessageTopic;

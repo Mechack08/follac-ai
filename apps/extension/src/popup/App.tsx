@@ -7,6 +7,21 @@ type TabState = {
   isLoading: boolean;
 };
 
+type AuthUser = { id: string; email: string; name: string };
+type AuthState = { user: AuthUser | null; isLoading: boolean };
+
+function sendToBackground<T>(topic: string, payload: unknown = {}): Promise<T> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { topic, payload, timestamp: new Date().toISOString() },
+      (response: { ok: boolean; data?: T; error?: string }) => {
+        if (response?.ok) resolve(response.data as T);
+        else reject(new Error(response?.error ?? "Unknown error"));
+      },
+    );
+  });
+}
+
 const PLATFORM_LABELS: Record<string, string> = {
   gmail: "Gmail",
   "google-docs": "Google Docs",
@@ -27,6 +42,13 @@ export default function PopupApp() {
     actions: [],
     isLoading: true,
   });
+  const [auth, setAuth] = useState<AuthState>({ user: null, isLoading: true });
+
+  useEffect(() => {
+    sendToBackground<{ user: AuthUser | null }>("auth:get-session")
+      .then((data) => setAuth({ user: data.user, isLoading: false }))
+      .catch(() => setAuth({ user: null, isLoading: false }));
+  }, []);
 
   useEffect(() => {
     // Query active tab to load stored context
@@ -60,13 +82,17 @@ export default function PopupApp() {
     sendToContent({ topic: "action:approved", payload: action, timestamp: new Date().toISOString() });
   };
 
-  if (state.isLoading) {
+  if (state.isLoading || auth.isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-48 bg-slate-900">
         <div className="h-6 w-6 rounded-full border-2 border-follac-500 border-t-transparent animate-spin" />
         <p className="mt-3 text-sm text-slate-400">Loading context...</p>
       </div>
     );
+  }
+
+  if (!auth.user) {
+    return <SignInView onSignedIn={(user) => setAuth({ user, isLoading: false })} />;
   }
 
   return (
@@ -101,11 +127,94 @@ export default function PopupApp() {
       </main>
 
       {/* Footer */}
-      <footer className="px-4 py-2 border-t border-slate-800">
-        <p className="text-xs text-slate-500 text-center">
-          All actions require your approval
-        </p>
+      <footer className="flex items-center justify-between px-4 py-2 border-t border-slate-800">
+        <p className="text-xs text-slate-500 truncate">{auth.user.email}</p>
+        <button
+          onClick={() => {
+            void sendToBackground("auth:sign-out").then(() =>
+              setAuth({ user: null, isLoading: false }),
+            );
+          }}
+          className="text-xs text-slate-400 hover:text-slate-200"
+        >
+          Sign out
+        </button>
       </footer>
+    </div>
+  );
+}
+
+// ─── Sign-in view ─────────────────────────────────────────────────────────────
+
+function SignInView({ onSignedIn }: { onSignedIn: (user: AuthUser) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    sendToBackground<{ user: AuthUser }>("auth:sign-in", { email, password })
+      .then((data) => onSignedIn(data.user))
+      .catch((err: Error) => {
+        setError(err.message);
+        setBusy(false);
+      });
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-slate-900 text-slate-100">
+      <header className="flex items-center gap-2 px-4 py-3 border-b border-slate-800">
+        <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-follac-600">
+          <span className="text-white text-xs font-bold">F</span>
+        </div>
+        <span className="font-semibold text-sm tracking-tight">Follac AI</span>
+      </header>
+      <main className="flex-1 px-4 py-4">
+        <p className="text-sm font-medium text-slate-200">Sign in to your account</p>
+        <p className="mt-1 text-xs text-slate-500">
+          The in-page assistant uses your Follac subscription.
+        </p>
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          <input
+            type="email"
+            required
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-follac-500 focus:outline-none"
+          />
+          <input
+            type="password"
+            required
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-follac-500 focus:outline-none"
+          />
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full py-2 text-xs font-semibold rounded-lg bg-follac-600 hover:bg-follac-500 disabled:opacity-50 text-white transition-colors"
+          >
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+        <p className="mt-3 text-xs text-slate-500">
+          No account?{" "}
+          <a
+            href="http://localhost:3000/signup"
+            target="_blank"
+            rel="noreferrer"
+            className="text-follac-400 hover:underline"
+          >
+            Start a free trial
+          </a>
+        </p>
+      </main>
     </div>
   );
 }

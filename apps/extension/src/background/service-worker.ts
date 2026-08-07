@@ -13,6 +13,7 @@
  */
 
 import type { ExtensionMessage, ContextObject, ProposedAction } from "@follac/shared";
+import { authedFetch, getSession, signIn, signOut } from "./auth.js";
 
 const SERVER_BASE = "http://localhost:3001";
 
@@ -70,6 +71,29 @@ chrome.runtime.onMessage.addListener(
           .then((data) => sendResponse({ ok: true, data }))
           .catch((err: unknown) => sendResponse({ ok: false, error: String(err) }));
         return true; // keep channel open for async
+
+      // ── Auth: popup delegates sign-in/out so the token lives in one place ──
+      case "auth:sign-in": {
+        const creds = message.payload as { email: string; password: string };
+        signIn(creds.email, creds.password)
+          .then((data) => sendResponse({ ok: true, data }))
+          .catch((err: unknown) =>
+            sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }),
+          );
+        return true;
+      }
+
+      case "auth:sign-out":
+        signOut()
+          .then(() => sendResponse({ ok: true }))
+          .catch((err: unknown) => sendResponse({ ok: false, error: String(err) }));
+        return true;
+
+      case "auth:get-session":
+        getSession()
+          .then((user) => sendResponse({ ok: true, data: { user } }))
+          .catch(() => sendResponse({ ok: true, data: { user: null } }));
+        return true;
 
       default:
         sendResponse({ ok: false, error: "Unknown topic" });
@@ -149,13 +173,13 @@ function updateBadge(tabId: number, text: string): void {
 
 // ─── Proxy Fetch Helper ───────────────────────────────────────────────────────
 // Service worker bypasses page CSP (Gmail / Docs block fetch to localhost).
+// Requests carry the user's session token (see ./auth.ts).
 
 async function proxyFetch(url: string, body: unknown): Promise<unknown> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const response = await authedFetch(url, body);
+  if (response.status === 401) {
+    throw new Error("Sign in to Follac from the extension popup to use AI actions.");
+  }
   if (!response.ok) {
     // Extract the error.message field from JSON, or fall back to status text
     const errJson = await response.json().catch(() => null) as { error?: string } | null;

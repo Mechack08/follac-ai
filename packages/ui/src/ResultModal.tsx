@@ -72,7 +72,7 @@ function tryParseTasks(output: string): Task[] | null {
 
 // ─── Inline Markdown Renderer ─────────────────────────────────────────────
 
-function renderInline(text: string): (string | JSX.Element)[] {
+function renderInline(text: string): (string | React.JSX.Element)[] {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
