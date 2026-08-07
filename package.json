@@ -11,9 +11,15 @@
     "build": "pnpm -r build",
     "build:extension": "pnpm --filter @follac/extension build",
     "build:server": "pnpm --filter @follac/server build",
+    "build:web": "pnpm --filter @follac/web build",
     "dev": "pnpm --filter @follac/extension dev & pnpm --filter @follac/server dev",
     "dev:extension": "pnpm --filter @follac/extension dev",
     "dev:server": "pnpm --filter @follac/server dev",
+    "dev:web": "pnpm --filter @follac/web dev",
+    "dev:worker": "pnpm --filter @follac/worker dev",
+    "db:generate": "pnpm --filter @follac/db db:generate",
+    "db:migrate": "pnpm --filter @follac/db db:migrate",
+    "db:seed": "pnpm --filter @follac/db db:seed",
     "lint": "pnpm -r lint",
     "type-check": "pnpm -r type-check",
     "clean": "find . -name 'dist' -not -path '*/node_modules/*' -exec rm -rf {} + 2>/dev/null; find . -name '.turbo' -exec rm -rf {} + 2>/dev/null; echo 'Clean complete'",
@@ -29,6 +35,12 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "prettier": "^3.2.5",
     "typescript": "^5.4.5"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "^19.2.18",
+      "@types/react-dom": "^19.2.4"
+    }
   },
   "engines": {
     "node": ">=20.0.0",
