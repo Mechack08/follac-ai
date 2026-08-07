@@ -1,18 +1,45 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-  --color-brand-800: #3730a3;
-  --color-brand-900: #312e81;
+  --color-brand-50: #fff1f3;
+  --color-brand-100: #ffe0e6;
+  --color-brand-200: #ffc2ce;
+  --color-brand-300: #ff94a8;
+  --color-brand-400: #ff5775;
+  --color-brand-500: #ff0034;
+  --color-brand-600: #e0002e;
+  --color-brand-700: #b80026;
+  --color-brand-800: #940021;
+  --color-brand-900: #6e0019;
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+
+  --animate-rise: rise 0.7s ease-out both;
+  --animate-rise-late: rise 0.8s ease-out 0.12s both;
+  --animate-rise-later: rise 0.85s ease-out 0.24s both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+html {
+  /* Prevent horizontal jump when navigating between short and tall pages */
+  scrollbar-gutter: stable;
 }
 
 body {
-  @apply bg-gray-50 text-gray-900 antialiased;
+  @apply bg-white text-neutral-900 antialiased;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-brand-500) 18%, white);
 }

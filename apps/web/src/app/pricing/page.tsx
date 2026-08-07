@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, type Plan } from "@/lib/api";
 import { Spinner } from "@/components/ui";
+import { MarketingShell, PageCta } from "@/components/site-chrome";
 
 export default function PricingPage() {
   const [plans, setPlans] = useState<Plan[] | null>(null);
@@ -15,75 +16,71 @@ export default function PricingPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-white">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <Link href="/" className="text-xl font-bold text-brand-600">
-          Follac AI
-        </Link>
-        <div className="flex items-center gap-4">
-          <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-            Sign in
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            Start free trial
-          </Link>
+    <MarketingShell>
+      <section className="mx-auto max-w-5xl px-6 py-16 sm:py-20">
+        <div className="mx-auto max-w-xl text-center">
+          <h1 className="text-3xl font-bold tracking-tight text-neutral-950 sm:text-4xl">
+            Pay for what Follac saves you
+          </h1>
+          <p className="mt-4 text-[15px] leading-relaxed text-neutral-500">
+            Every plan starts with a 7-day free trial of full Pro features. No credit card required.
+            Meetings, browser assist, and reports included by tier.
+          </p>
         </div>
-      </nav>
-
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <h1 className="text-center text-4xl font-bold text-gray-900">
-          Pay for what Follac saves you
-        </h1>
-        <p className="mx-auto mt-4 max-w-xl text-center text-gray-600">
-          Every plan starts with a 7-day free trial of full Pro features. No credit card required.
-        </p>
 
         {!plans ? (
           <Spinner />
         ) : (
-          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => {
               const isPro = plan.id === "pro";
               return (
                 <div
                   key={plan.id}
-                  className={`flex flex-col rounded-2xl border p-6 ${
+                  className={`flex flex-col rounded-xl border bg-white p-6 ${
                     isPro
-                      ? "border-brand-600 shadow-lg shadow-brand-600/10 ring-1 ring-brand-600"
-                      : "border-gray-200"
+                      ? "border-brand-500 ring-1 ring-brand-500"
+                      : "border-neutral-200/90"
                   }`}
                 >
                   {isPro && (
-                    <span className="mb-2 self-start rounded-full bg-brand-100 px-3 py-0.5 text-xs font-semibold text-brand-700">
+                    <span className="mb-3 self-start rounded-md bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">
                       Most popular
                     </span>
                   )}
-                  <h2 className="text-lg font-semibold text-gray-900">{plan.name}</h2>
+                  <h2 className="text-base font-semibold text-neutral-900">{plan.name}</h2>
                   <p className="mt-2">
-                    <span className="text-4xl font-bold text-gray-900">
+                    <span className="text-3xl font-bold tracking-tight text-neutral-950">
                       ${(plan.priceMonthlyCents / 100).toFixed(0)}
                     </span>
                     {plan.priceMonthlyCents > 0 && (
-                      <span className="text-sm text-gray-500">/month</span>
+                      <span className="text-sm text-neutral-500">/month</span>
                     )}
                   </p>
-                  <ul className="mt-6 flex-1 space-y-3">
+                  <ul className="mt-6 flex-1 space-y-2.5">
                     {plan.highlights.map((highlight) => (
-                      <li key={highlight} className="flex gap-2 text-sm text-gray-600">
-                        <span className="text-brand-600">✓</span>
+                      <li key={highlight} className="flex gap-2 text-sm text-neutral-600">
+                        <span className="mt-0.5 text-brand-500" aria-hidden>
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                            <path
+                              d="M3 7.2l2.5 2.5L11 4"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
                         {highlight}
                       </li>
                     ))}
                   </ul>
                   <Link
                     href="/signup"
-                    className={`mt-6 rounded-lg px-4 py-2.5 text-center text-sm font-semibold ${
+                    className={`mt-6 rounded-md px-4 py-2.5 text-center text-sm font-semibold transition-colors ${
                       isPro
-                        ? "bg-brand-600 text-white hover:bg-brand-700"
-                        : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                        ? "bg-brand-500 text-white hover:bg-brand-600"
+                        : "border border-neutral-200 text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50"
                     }`}
                   >
                     {plan.priceMonthlyCents === 0 ? "Start free" : "Start trial"}
@@ -94,6 +91,11 @@ export default function PricingPage() {
           </div>
         )}
       </section>
-    </main>
+
+      <PageCta
+        title="Try the full product for a week."
+        body="Meeting notes, in-page assist, and email reports. Keep a plan only if it earns its place."
+      />
+    </MarketingShell>
   );
 }
