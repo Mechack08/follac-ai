@@ -10,9 +10,17 @@
     "paths": {
       "@follac/shared": ["../../packages/shared/src/index.ts"],
       "@follac/agents": ["../../packages/agents/src/index.ts"],
-      "@follac/platform-adapters": ["../../packages/platform-adapters/src/index.ts"]
+      "@follac/platform-adapters": ["../../packages/platform-adapters/src/index.ts"],
+      "@follac/db": ["../../packages/db/src/index.ts"],
+      "@follac/emails": ["../../packages/emails/src/index.ts"]
     }
   },
-  "include": ["src", "../../packages/shared/src", "../../packages/agents/src"],
+  "include": [
+    "src",
+    "../../packages/shared/src",
+    "../../packages/agents/src",
+    "../../packages/db/src",
+    "../../packages/emails/src"
+  ],
   "exclude": ["dist", "node_modules"]
 }
