@@ -1,0 +1,22 @@
+{
+  "name": "@follac/emails",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Follac AI — transactional email templates (React Email)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "typescript": "*"
+  },
+  "dependencies": {
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "react": "^19.2.8"
+  }
+}
