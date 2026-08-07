@@ -1,5 +1,5 @@
 /**
- * Thin API client — all dashboard/admin calls go through here.
+ * Thin API client - all dashboard/admin calls go through here.
  * Sends the better-auth session cookie with every request.
  */
 import { API_URL } from "./auth-client";
@@ -14,13 +14,17 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  // Only set JSON content-type when we actually send a body. Empty POST/DELETE
+  // with application/json makes Fastify reject the request.
+  if (init?.body != null && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
   if (!res.ok) {
     let message = res.statusText;
@@ -32,7 +36,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(res.status, message);
   }
-  return (await res.json()) as T;
+  // Some endpoints return 204 / empty body
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 // ─── Shared response types ────────────────────────────────────────────────────
@@ -43,8 +51,12 @@ export interface MeetingListItem {
   platform: string;
   status: string;
   startsAt: string | null;
+  endsAt?: string | null;
   durationSeconds: number | null;
   summary: string | null;
+  joinEnabled?: boolean;
+  hasExternalGuests?: boolean | null;
+  calendarEventId?: string | null;
   createdAt: string;
 }
 
@@ -71,6 +83,7 @@ export interface ActionItem {
 export interface MeetingDetail {
   meeting: MeetingListItem & {
     meetingUrl: string;
+    recordingUrl?: string | null;
     keyPoints: string[] | null;
     decisions: string[] | null;
     speakerStats: Array<{
@@ -121,6 +134,6 @@ export interface UserSettings {
   userId: string;
   sendFullReport: boolean;
   sendSummaryReport: boolean;
-  autoRecordMode: "all" | "external_only" | "none";
+  autoRecordMode: "all" | "ask" | "external_only" | "none";
   botName: string;
 }
