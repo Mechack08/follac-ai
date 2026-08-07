@@ -99,7 +99,11 @@ export const userSettings = pgTable("user_settings", {
     .references(() => user.id, { onDelete: "cascade" }),
   sendFullReport: boolean("send_full_report").notNull().default(true),
   sendSummaryReport: boolean("send_summary_report").notNull().default(true),
-  /** 'all' | 'external_only' | 'none' — which calendar meetings get a bot */
+  /**
+   * Which calendar meetings get a bot by default:
+   * 'all' | 'ask' | 'external_only' | 'none'
+   * Per-meeting joinEnabled can always override.
+   */
   autoRecordMode: text("auto_record_mode").notNull().default("all"),
   botName: text("bot_name").notNull().default("Follac Notetaker"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -146,6 +150,13 @@ export const meetings = pgTable(
     status: meetingStatusEnum("status").notNull().default("scheduled"),
     startsAt: timestamp("starts_at"),
     endsAt: timestamp("ends_at"),
+    /**
+     * When true, the scheduler may dispatch a bot. Set from autoRecordMode
+     * at sync time; the user can flip it per meeting in the dashboard.
+     */
+    joinEnabled: boolean("join_enabled").notNull().default(true),
+    /** True when at least one attendee is outside the calendar owner's domain */
+    hasExternalGuests: boolean("has_external_guests"),
     /** External bot id (Recall.ai) once dispatched */
     botId: text("bot_id"),
     recordingUrl: text("recording_url"),
