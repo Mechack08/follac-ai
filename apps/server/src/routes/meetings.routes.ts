@@ -4,6 +4,7 @@
  * GET    /api/meetings                 — list the user's meetings
  * POST   /api/meetings                 — invite the bot to a meeting by URL
  * GET    /api/meetings/:id             — meeting detail (insights, transcript, reports)
+ * PATCH  /api/meetings/:id             — toggle join / update scheduled meeting
  * DELETE /api/meetings/:id             — cancel a scheduled meeting / remove the bot
  * GET    /api/action-items             — action items across meetings
  * PATCH  /api/action-items/:id         — update an action item's status
@@ -29,6 +30,10 @@ const CreateMeetingBody = z.object({
   title: z.string().min(1).max(200).optional(),
 });
 
+const UpdateMeetingBody = z.object({
+  joinEnabled: z.boolean().optional(),
+});
+
 const UpdateActionItemBody = z.object({
   status: z.enum(["open", "in_progress", "done", "dismissed"]),
 });
@@ -46,13 +51,17 @@ export async function meetingsRoutes(fastify: FastifyInstance): Promise<void> {
         platform: meetings.platform,
         status: meetings.status,
         startsAt: meetings.startsAt,
+        endsAt: meetings.endsAt,
         durationSeconds: meetings.durationSeconds,
         summary: meetings.summary,
+        joinEnabled: meetings.joinEnabled,
+        hasExternalGuests: meetings.hasExternalGuests,
+        calendarEventId: meetings.calendarEventId,
         createdAt: meetings.createdAt,
       })
       .from(meetings)
       .where(eq(meetings.userId, userId))
-      .orderBy(desc(meetings.createdAt))
+      .orderBy(desc(meetings.startsAt), desc(meetings.createdAt))
       .limit(100);
     return { meetings: rows };
   });
@@ -98,6 +107,7 @@ export async function meetingsRoutes(fastify: FastifyInstance): Promise<void> {
         status: "bot_dispatched",
         startsAt: new Date(),
         botId,
+        joinEnabled: true,
       });
       return reply.status(201).send({ id: meetingId, status: "bot_dispatched" });
     } catch (err) {
@@ -138,6 +148,72 @@ export async function meetingsRoutes(fastify: FastifyInstance): Promise<void> {
     return { meeting, segments, actionItems: items, reports: meetingReports };
   });
 
+  fastify.patch("/meetings/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = UpdateMeetingBody.safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: "Invalid meeting update" });
+
+    const db = getDb();
+    const userId = request.sessionUser!.id;
+    const [meeting] = await db
+      .select()
+      .from(meetings)
+      .where(and(eq(meetings.id, id), eq(meetings.userId, userId)))
+      .limit(1);
+    if (!meeting) return reply.status(404).send({ error: "Meeting not found" });
+
+    if (body.data.joinEnabled === undefined) {
+      return reply.status(400).send({ error: "Nothing to update" });
+    }
+
+    const joinEnabled = body.data.joinEnabled;
+
+    // Turning join off after the bot was sent: pull the bot back
+    if (
+      !joinEnabled &&
+      meeting.botId &&
+      (meeting.status === "bot_dispatched" || meeting.status === "recording")
+    ) {
+      try {
+        await meetingBotProvider.removeBot(meeting.botId);
+      } catch (err) {
+        fastify.log.warn({ err: String(err), meetingId: id }, "Failed to remove bot while disabling join");
+      }
+      const [updated] = await db
+        .update(meetings)
+        .set({
+          joinEnabled: false,
+          botId: null,
+          status: "scheduled",
+          updatedAt: new Date(),
+        })
+        .where(eq(meetings.id, id))
+        .returning({
+          id: meetings.id,
+          joinEnabled: meetings.joinEnabled,
+          status: meetings.status,
+        });
+      return updated;
+    }
+
+    if (meeting.status !== "scheduled" && meeting.status !== "bot_dispatched") {
+      return reply
+        .status(409)
+        .send({ error: `Cannot change join for a meeting in status "${meeting.status}"` });
+    }
+
+    const [updated] = await db
+      .update(meetings)
+      .set({ joinEnabled, updatedAt: new Date() })
+      .where(eq(meetings.id, id))
+      .returning({
+        id: meetings.id,
+        joinEnabled: meetings.joinEnabled,
+        status: meetings.status,
+      });
+    return updated;
+  });
+
   fastify.delete("/meetings/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
     const db = getDb();
@@ -156,7 +232,7 @@ export async function meetingsRoutes(fastify: FastifyInstance): Promise<void> {
     if (meeting.status === "scheduled" || meeting.status === "bot_dispatched") {
       await db
         .update(meetings)
-        .set({ status: "cancelled", updatedAt: new Date() })
+        .set({ status: "cancelled", joinEnabled: false, updatedAt: new Date() })
         .where(eq(meetings.id, id));
       return { status: "cancelled" };
     }

@@ -6,14 +6,15 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
-import { getDb, userSettings } from "@follac/db";
+import { and, eq } from "drizzle-orm";
+import { getDb, meetings, userSettings } from "@follac/db";
 import { requireUser } from "../lib/session.js";
+import { defaultJoinEnabled, type AutoRecordMode } from "../services/calendar.service.js";
 
 const UpdateBody = z.object({
   sendFullReport: z.boolean().optional(),
   sendSummaryReport: z.boolean().optional(),
-  autoRecordMode: z.enum(["all", "external_only", "none"]).optional(),
+  autoRecordMode: z.enum(["all", "ask", "external_only", "none"]).optional(),
   botName: z.string().min(1).max(60).optional(),
 });
 
@@ -41,11 +42,44 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
     const db = getDb();
     const userId = request.sessionUser!.id;
     await db.insert(userSettings).values({ userId }).onConflictDoNothing();
+
+    const [before] = await db
+      .select()
+      .from(userSettings)
+      .where(eq(userSettings.userId, userId))
+      .limit(1);
+
     const [settings] = await db
       .update(userSettings)
       .set({ ...body.data, updatedAt: new Date() })
       .where(eq(userSettings.userId, userId))
       .returning();
+
+    // Re-apply default join flags only when the mode itself changes
+    if (
+      body.data.autoRecordMode &&
+      body.data.autoRecordMode !== before?.autoRecordMode
+    ) {
+      const mode = body.data.autoRecordMode as AutoRecordMode;
+      const scheduled = await db
+        .select({
+          id: meetings.id,
+          hasExternalGuests: meetings.hasExternalGuests,
+        })
+        .from(meetings)
+        .where(and(eq(meetings.userId, userId), eq(meetings.status, "scheduled")));
+
+      for (const row of scheduled) {
+        await db
+          .update(meetings)
+          .set({
+            joinEnabled: defaultJoinEnabled(mode, row.hasExternalGuests ?? false),
+            updatedAt: new Date(),
+          })
+          .where(eq(meetings.id, row.id));
+      }
+    }
+
     return { settings };
   });
 }

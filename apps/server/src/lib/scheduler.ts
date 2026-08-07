@@ -33,7 +33,7 @@ export function startScheduler(): void {
   // First pass shortly after boot so dev servers behave predictably
   setTimeout(() => void tick(), 10_000);
   console.warn(
-    `[scheduler] Started — interval ${Math.round(config.calendar.syncIntervalMs / 1000)}s`,
+    `[scheduler] Started. Interval ${Math.round(config.calendar.syncIntervalMs / 1000)}s`,
   );
 }
 
@@ -100,6 +100,7 @@ async function dispatchDueBots(): Promise<void> {
         .limit(1);
 
       if (settings?.autoRecordMode === "none") continue;
+      if (!meeting.joinEnabled) continue;
 
       const entitlements = await getEntitlements(meeting.userId);
       if (!entitlements.canRecord) {
@@ -107,7 +108,7 @@ async function dispatchDueBots(): Promise<void> {
           .update(meetings)
           .set({
             status: "cancelled",
-            error: "Plan limit reached — upgrade to keep recording meetings",
+            error: "Plan limit reached. Upgrade to keep recording meetings",
             updatedAt: new Date(),
           })
           .where(eq(meetings.id, meeting.id));
