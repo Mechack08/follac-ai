@@ -48,11 +48,29 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24,
   },
+  /**
+   * Web (:3000) and API (:3001) are different origins. OAuth still needs the
+   * state cookie on the API host after a cross-origin sign-in fetch.
+   */
+  account: {
+    storeStateStrategy: "database",
+    // Cookie may still be blocked cross-port in some browsers; DB holds the real state.
+    skipStateCookieCheck: true,
+    accountLinking: {
+      enabled: true,
+      // Allow Google to attach to an existing email/password user with the same email
+      trustedProviders: ["google"],
+      // Email/password signups don't verify email in local/dev; don't block Google linking
+      requireLocalEmailVerified: false,
+    },
+  },
   advanced: {
-    defaultCookieAttributes:
-      config.nodeEnv === "production"
-        ? { sameSite: "none", secure: true, partitioned: true }
-        : undefined,
+    defaultCookieAttributes: {
+      sameSite: "none",
+      secure: true,
+      // Chrome allows Secure cookies on http://localhost
+      ...(config.nodeEnv === "production" ? { partitioned: true } : {}),
+    },
   },
   databaseHooks: {
     user: {

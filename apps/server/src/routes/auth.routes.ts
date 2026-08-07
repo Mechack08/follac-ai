@@ -30,9 +30,21 @@ export async function authRoutes(server: FastifyInstance): Promise<void> {
       const response = await auth.handler(webRequest);
 
       reply.status(response.status);
+
+      // Preserve every Set-Cookie. Headers.forEach collapses them into one value,
+      // which drops the OAuth state cookie and causes state_mismatch on Google callback.
+      const setCookies =
+        typeof response.headers.getSetCookie === "function"
+          ? response.headers.getSetCookie()
+          : [];
       response.headers.forEach((value, key) => {
+        if (key.toLowerCase() === "set-cookie") return;
         reply.header(key, value);
       });
+      for (const cookie of setCookies) {
+        reply.header("set-cookie", cookie);
+      }
+
       const body = await response.text();
       return reply.send(body.length > 0 ? body : undefined);
     },
