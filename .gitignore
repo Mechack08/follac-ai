@@ -38,3 +38,7 @@ coverage/
 
 # Misc
 *.local
+
+# Next.js
+.next/
+out/
