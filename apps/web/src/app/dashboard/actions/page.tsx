@@ -34,10 +34,10 @@ export default function ActionItemsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Action items</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Action items</h1>
+        <p className="mt-1 text-sm text-neutral-500">
           Everything you and your teams committed to, across all meetings. Click a status to advance it.
         </p>
       </div>
@@ -50,9 +50,9 @@ export default function ActionItemsPage() {
           subtitle="When Follac hears commitments in your meetings, they'll be tracked here with owners and due dates."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <thead className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
               <tr>
                 <th className="px-4 py-3">Task</th>
                 <th className="px-4 py-3">Owner</th>
@@ -61,11 +61,11 @@ export default function ActionItemsPage() {
                 <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-neutral-100">
               {items.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="max-w-md px-4 py-3 text-gray-900">{item.description}</td>
-                  <td className="px-4 py-3 text-gray-600">{item.owner ?? "—"}</td>
+                <tr key={item.id} className="hover:bg-neutral-50">
+                  <td className="max-w-md px-4 py-3 text-neutral-900">{item.description}</td>
+                  <td className="px-4 py-3 text-neutral-600">{item.owner ?? "-"}</td>
                   <td className="px-4 py-3">
                     <Link
                       href={`/dashboard/meetings/${item.meetingId}`}
@@ -74,7 +74,7 @@ export default function ActionItemsPage() {
                       {item.meetingTitle ?? "View"}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{formatDate(item.dueDate)}</td>
+                  <td className="px-4 py-3 text-neutral-600">{formatDate(item.dueDate)}</td>
                   <td className="px-4 py-3">
                     <button onClick={() => void cycle(item)} title="Click to advance">
                       <Badge tone={statusTone(item.status)}>{item.status.replace(/_/g, " ")}</Badge>

@@ -86,7 +86,7 @@ export default function AdminUsersPage() {
                     <p className="font-medium text-gray-900">{user.name}</p>
                     <p className="text-xs text-gray-500">{user.email}</p>
                   </td>
-                  <td className="px-4 py-3 capitalize text-gray-700">{user.planId ?? "—"}</td>
+                  <td className="px-4 py-3 capitalize text-gray-700">{user.planId ?? "-"}</td>
                   <td className="px-4 py-3">
                     {user.subStatus ? (
                       <Badge tone={statusTone(user.subStatus)}>{user.subStatus}</Badge>
