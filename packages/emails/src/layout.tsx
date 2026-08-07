@@ -12,7 +12,7 @@ import {
 import type { ReactNode } from "react";
 
 export const colors = {
-  brand: "#4f46e5",
+  brand: "#FF0034",
   text: "#1f2937",
   muted: "#6b7280",
   border: "#e5e7eb",
@@ -34,7 +34,7 @@ export function EmailLayout({
         <Container style={{ maxWidth: "600px", margin: "0 auto", padding: "24px 16px" }}>
           <Section style={{ marginBottom: "16px" }}>
             <Text style={{ fontSize: "20px", fontWeight: 700, color: colors.brand, margin: 0 }}>
-              Follac AI
+              Follac
             </Text>
           </Section>
           <Section
@@ -49,7 +49,7 @@ export function EmailLayout({
           </Section>
           <Hr style={{ borderColor: colors.border, margin: "24px 0 12px" }} />
           <Text style={{ fontSize: "12px", color: colors.muted, margin: 0 }}>
-            Sent by Follac AI — your meeting assistant.{" "}
+            Sent by Follac, your work assistant.{" "}
             <Link href="https://follac.ai" style={{ color: colors.muted }}>
               follac.ai
             </Link>

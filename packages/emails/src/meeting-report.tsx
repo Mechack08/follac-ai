@@ -47,7 +47,7 @@ function ReportBody({ data, full }: { data: MeetingReportData; full: boolean }) 
           {data.actionItems.map((item, i) => (
             <Text key={i} style={bullet}>
               → {item.description}
-              {item.owner ? ` — ${item.owner}` : ""}
+              {item.owner ? ` · ${item.owner}` : ""}
               {item.dueDate ? ` (due ${item.dueDate})` : ""}
             </Text>
           ))}

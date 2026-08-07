@@ -17,7 +17,7 @@ function getResend(): Resend | null {
 async function send(to: string, subject: string, html: string): Promise<void> {
   const resend = getResend();
   if (!resend) {
-    console.warn(`[email] RESEND_API_KEY not set — skipping "${subject}" to ${to}`);
+    console.warn(`[email] RESEND_API_KEY not set. Skipping "${subject}" to ${to}`);
     return;
   }
   await resend.emails.send({ from: config.email.from, to, subject, html });
@@ -25,7 +25,7 @@ async function send(to: string, subject: string, html: string): Promise<void> {
 
 export async function sendWelcomeEmail(to: string, name: string): Promise<void> {
   const html = await renderWelcome(name, `${config.webUrl}/dashboard/settings`);
-  await send(to, "Welcome to Follac AI — let's set up your first meeting", html);
+  await send(to, "Welcome to Follac. let's set up your first meeting", html);
 }
 
 export async function sendTrialEndingEmail(to: string, name: string): Promise<void> {

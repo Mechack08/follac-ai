@@ -13,23 +13,22 @@ const cta = {
 
 export function WelcomeEmail({ name, dashboardUrl }: { name: string; dashboardUrl: string }) {
   return (
-    <EmailLayout preview="Welcome to Follac AI — your meeting assistant is ready">
+    <EmailLayout preview="Welcome to Follac. Your work assistant is ready.">
       <Heading as="h1" style={{ fontSize: "22px", color: colors.text, margin: "0 0 16px" }}>
         Welcome, {name}
       </Heading>
       <Text style={paragraph}>
-        Your 7-day free trial has started. Here is how to get your first meeting report in
-        under two minutes:
+        Your 7-day free trial has started. Here is the quickest way to see value:
       </Text>
       <Text style={paragraph}>
-        1. Connect your Google Calendar — Follac will spot your upcoming meetings.
+        1. Connect your Google Calendar so Follac can join upcoming meetings.
         <br />
-        2. Join your next call as usual. Our notetaker joins with you.
+        2. Install the Chrome extension for help in Gmail, Docs, and LinkedIn.
         <br />
-        3. Minutes after it ends, the summary, decisions and action items land in your inbox.
+        3. After your next call, open the report in your inbox or dashboard.
       </Text>
       <Button href={dashboardUrl} style={cta}>
-        Connect your calendar
+        Open your workspace
       </Button>
     </EmailLayout>
   );
@@ -37,13 +36,13 @@ export function WelcomeEmail({ name, dashboardUrl }: { name: string; dashboardUr
 
 export function TrialEndingEmail({ name, upgradeUrl }: { name: string; upgradeUrl: string }) {
   return (
-    <EmailLayout preview="Your Follac AI trial ends tomorrow">
+    <EmailLayout preview="Your Follac trial ends tomorrow">
       <Heading as="h1" style={{ fontSize: "22px", color: colors.text, margin: "0 0 16px" }}>
         Your trial ends tomorrow
       </Heading>
       <Text style={paragraph}>
-        Hi {name}, your 7-day Follac AI trial ends in 24 hours. Pick a plan to keep your
-        meeting bot, reports, and action-item tracking running without interruption.
+        Hi {name}, your 7-day Follac trial ends in 24 hours. Pick a plan to keep meetings,
+        reports, and in-page assist running without interruption.
       </Text>
       <Button href={upgradeUrl} style={cta}>
         Choose a plan
@@ -59,8 +58,8 @@ export function PaymentFailedEmail({ name, billingUrl }: { name: string; billing
         We could not process your payment
       </Heading>
       <Text style={paragraph}>
-        Hi {name}, your latest Follac AI payment failed. Please update your payment method to
-        keep your subscription active — we will retry automatically over the next few days.
+        Hi {name}, your latest Follac payment failed. Please update your payment method to keep
+        your subscription active. We will retry automatically over the next few days.
       </Text>
       <Button href={billingUrl} style={cta}>
         Update payment method

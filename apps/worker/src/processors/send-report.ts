@@ -101,7 +101,7 @@ export async function sendReport(job: ReportJob): Promise<void> {
         if (error) throw new Error(error.message);
         providerMessageId = sent?.id ?? null;
       } else {
-        console.warn(`[worker] RESEND_API_KEY not set — skipping "${subject}"`);
+        console.warn(`[worker] RESEND_API_KEY not set. Skipping "${subject}"`);
       }
       await db.insert(reports).values({
         id: reportId,
